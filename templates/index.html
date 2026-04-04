@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Underfloor Heating Mapper</title>
+    <style>
+        /* Simple, clean styling */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .upload-box {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        .result img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body>
+    <h1>Underfloor Heating Mapper</h1>
+
+    <!-- Upload form -->
+    <div class="upload-box">
+        <h2>Upload a Floor Plan</h2>
+        <p>Select a JPG or PNG image of your floor plan.</p>
+
+        <!--
+          enctype="multipart/form-data" is required for file uploads.
+          method="post" tells the browser to send the file to the server.
+        -->
+        <form method="post" enctype="multipart/form-data">
+            <input type="file" name="floor_plan" accept=".jpg,.jpeg,.png" required>
+            <br><br>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
+
+    <!-- Display the uploaded image (only shown after a successful upload) -->
+    {% if uploaded_image %}
+    <div class="result">
+        <h2>Your Floor Plan</h2>
+        <img src="{{ uploaded_image }}" alt="Uploaded floor plan">
+    </div>
+    {% endif %}
+</body>
+</html>
