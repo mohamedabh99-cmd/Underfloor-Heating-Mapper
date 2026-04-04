@@ -51,9 +51,10 @@ def index():
     return render_template("index.html", uploaded_image=uploaded_image)
 
 
+# Make sure the uploads folder exists (runs at import time for production servers)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 if __name__ == "__main__":
-    # Make sure the uploads folder exists
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     # host="0.0.0.0" makes the server accessible from other devices on your
     # network (like your iPad), not just this computer.
     app.run(host="0.0.0.0", debug=True)
