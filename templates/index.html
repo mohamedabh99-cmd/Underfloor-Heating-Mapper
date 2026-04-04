@@ -90,6 +90,56 @@
             font-size: 14px;
             margin: 8px 0;
         }
+
+        .scale-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .scale-row label { font-weight: bold; }
+        .scale-row input[type="number"] {
+            width: 80px;
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .scale-row select {
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .summary-box {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .summary-box table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .summary-box th, .summary-box td {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .summary-box th { color: #555; font-size: 13px; text-transform: uppercase; }
+        .summary-box .total-row td { font-weight: bold; border-top: 2px solid #333; border-bottom: none; }
+        .area-badge {
+            background: #eef6fb;
+            color: #2980b9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -117,6 +167,16 @@
         <button id="undoBtn" class="secondary">Undo Last Point</button>
         <button id="cancelBtn" class="secondary">Cancel Current Zone</button>
         <button id="clearBtn" class="danger">Clear All Zones</button>
+
+        <div class="scale-row">
+            <label for="scaleValue">Floor plan width:</label>
+            <input type="number" id="scaleValue" min="0.1" step="0.1" value="10" placeholder="e.g. 10">
+            <select id="scaleUnit">
+                <option value="m">meters (m)</option>
+                <option value="ft">feet (ft)</option>
+            </select>
+            <span class="help-text" style="margin:0;">Enter the real-world width of the image to get accurate area calculations.</span>
+        </div>
     </div>
 
     <!-- Floor plan with canvas overlay -->
@@ -129,6 +189,17 @@
     <div class="zone-list" id="zoneList" style="display:none;">
         <h2>Heating Zones</h2>
         <div id="zoneItems"></div>
+    </div>
+
+    <!-- Coverage summary -->
+    <div class="summary-box" id="summaryBox" style="display:none;">
+        <h2>Coverage Summary</h2>
+        <table>
+            <thead>
+                <tr><th>Zone</th><th>Area</th><th>% of Floor Plan</th></tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+        </table>
     </div>
 
     <script>
@@ -161,8 +232,40 @@
             "rgba(236, 100, 164, 0.9)"
         ];
 
+        var scaleInput = document.getElementById("scaleValue");
+        var unitSelect = document.getElementById("scaleUnit");
+
         var zones = [];          // Completed zones: [{points, color, border, name}]
         var currentPoints = [];  // Points being drawn right now
+
+        // --- Area calculation using the Shoelace formula ---
+        // This is a standard geometry formula that calculates the area of
+        // any polygon given its corner points.
+        function polygonAreaPixels(pts) {
+            var area = 0;
+            var n = pts.length;
+            for (var i = 0; i < n; i++) {
+                var j = (i + 1) % n;
+                area += pts[i].x * pts[j].y;
+                area -= pts[j].x * pts[i].y;
+            }
+            return Math.abs(area) / 2;
+        }
+
+        // Convert pixel area to real-world area using the scale
+        function pixelsToRealArea(pixelArea) {
+            var realWidth = parseFloat(scaleInput.value) || 10;
+            var pixelsPerUnit = canvas.width / realWidth;
+            return pixelArea / (pixelsPerUnit * pixelsPerUnit);
+        }
+
+        function getUnitLabel() {
+            return unitSelect.value === "ft" ? "ft" : "m";
+        }
+
+        // Recalculate everything when scale changes
+        scaleInput.addEventListener("input", function() { redraw(); updateZoneList(); updateSummary(); });
+        unitSelect.addEventListener("change", function() { redraw(); updateZoneList(); updateSummary(); });
 
         // Resize canvas to match the displayed image size
         function resizeCanvas() {
@@ -257,11 +360,18 @@
             cx /= pts.length;
             cy /= pts.length;
 
+            var realArea = pixelsToRealArea(polygonAreaPixels(pts));
+            var unit = getUnitLabel();
+            var label = zone.name;
+            var areaLabel = realArea.toFixed(1) + " " + unit + "\u00B2";
+
             ctx.font = "bold 14px Arial";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillStyle = zone.border;
-            ctx.fillText(zone.name, cx, cy);
+            ctx.fillText(label, cx, cy - 9);
+            ctx.font = "12px Arial";
+            ctx.fillText(areaLabel, cx, cy + 9);
         }
 
         // --- Zone completion ---
@@ -374,8 +484,11 @@
                     dot.className = "zone-color-dot";
                     dot.style.backgroundColor = zone.border;
 
+                    var realArea = pixelsToRealArea(polygonAreaPixels(zone.points));
+                    var unit = getUnitLabel();
+
                     var nameSpan = document.createElement("span");
-                    nameSpan.textContent = zone.name + " (" + zone.points.length + " points)";
+                    nameSpan.innerHTML = zone.name + " <span class='area-badge'>" + realArea.toFixed(1) + " " + unit + "\u00B2</span>";
 
                     var delBtn = document.createElement("button");
                     delBtn.className = "danger";
@@ -392,6 +505,49 @@
                     itemsDiv.appendChild(item);
                 })(i);
             }
+
+            updateSummary();
+        }
+
+        // --- Coverage summary table ---
+        function updateSummary() {
+            var summaryBox = document.getElementById("summaryBox");
+            var summaryBody = document.getElementById("summaryBody");
+
+            if (zones.length === 0) {
+                summaryBox.style.display = "none";
+                return;
+            }
+
+            summaryBox.style.display = "block";
+            summaryBody.innerHTML = "";
+
+            var unit = getUnitLabel();
+            var totalImageArea = pixelsToRealArea(canvas.width * canvas.height);
+            var totalZoneArea = 0;
+
+            for (var i = 0; i < zones.length; i++) {
+                var area = pixelsToRealArea(polygonAreaPixels(zones[i].points));
+                totalZoneArea += area;
+                var pct = (area / totalImageArea * 100).toFixed(1);
+
+                var row = document.createElement("tr");
+                row.innerHTML =
+                    "<td>" + zones[i].name + "</td>" +
+                    "<td>" + area.toFixed(1) + " " + unit + "\u00B2</td>" +
+                    "<td>" + pct + "%</td>";
+                summaryBody.appendChild(row);
+            }
+
+            // Total row
+            var totalPct = (totalZoneArea / totalImageArea * 100).toFixed(1);
+            var totalRow = document.createElement("tr");
+            totalRow.className = "total-row";
+            totalRow.innerHTML =
+                "<td>Total Coverage</td>" +
+                "<td>" + totalZoneArea.toFixed(1) + " " + unit + "\u00B2</td>" +
+                "<td>" + totalPct + "%</td>";
+            summaryBody.appendChild(totalRow);
         }
     })();
     </script>
