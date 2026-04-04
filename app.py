@@ -54,5 +54,6 @@ def index():
 if __name__ == "__main__":
     # Make sure the uploads folder exists
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    # Start the development server (debug=True auto-reloads on code changes)
-    app.run(debug=True)
+    # host="0.0.0.0" makes the server accessible from other devices on your
+    # network (like your iPad), not just this computer.
+    app.run(host="0.0.0.0", debug=True)
