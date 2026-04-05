@@ -181,12 +181,13 @@
 
     <!-- STEP 3: Draw heating zones -->
     <div class="panel hidden" id="step3panel">
-        <h2><span class="step-number">3</span> Draw Heating Zones</h2>
+        <h2><span class="step-number">3</span> Place Manifolds &amp; Draw Heating Zones</h2>
         <p class="help-text">
-            <strong>First click</strong> sets the manifold (pipe connection point).
-            Then click to draw the zone outline.
-            <strong>Double-tap/double-click</strong> to close each zone.
+            First, place one or more manifolds. Then draw zones &mdash; each zone connects to the most recently placed manifold.
         </p>
+        <button id="placeManifoldBtn" class="success">Place Manifold</button>
+        <span id="manifoldStatus" class="help-text" style="margin:0;"></span>
+        <br>
         <button id="undoBtn" class="secondary">Undo Last Point</button>
         <button id="cancelBtn" class="secondary">Cancel Current Zone</button>
         <button id="clearBtn" class="danger">Clear All Zones</button>
@@ -223,6 +224,7 @@
                 <tr>
                     <th>Group</th>
                     <th>Zone</th>
+                    <th>Manifold</th>
                     <th>Floor Area</th>
                     <th>Pipe Length</th>
                     <th>C.T.C.</th>
@@ -240,6 +242,7 @@
         var PIPE_DIAMETER_CM = 1.6;   // pipe diameter
 
         // --- State machine ---
+        // "boundary" | "scale" | "zones" | "placing_manifold"
         var mode = "boundary";
 
         // --- Setup ---
@@ -282,6 +285,8 @@
         var scale = 0;          // real sq-units per pixel sq-unit
         var linearScale = 0;    // real units per pixel
 
+        var manifolds = [];         // [{id, x, y, name}]
+        var activeManifoldId = null; // which manifold new zones connect to
         var zones = [];
         var currentPoints = [];
         var mousePos = null;    // current cursor position for line preview
@@ -442,14 +447,20 @@
             return { path: serpentine, lengthPx: totalLen, manifold: manifold };
         }
 
+        function findManifold(id) {
+            for (var i = 0; i < manifolds.length; i++) {
+                if (manifolds[i].id === id) return manifolds[i];
+            }
+            return manifolds[0]; // fallback
+        }
+
         function regeneratePipes() {
             if (scale === 0 || zones.length === 0) return;
             var spacingPx = PIPE_CTC_M / linearScale;
             pipePaths = [];
             for (var i = 0; i < zones.length; i++) {
-                pipePaths.push(generateSerpentine(
-                    zones[i].points, spacingPx, zones[i].manifold
-                ));
+                var m = findManifold(zones[i].manifoldId);
+                pipePaths.push(generateSerpentine(zones[i].points, spacingPx, m));
             }
         }
 
@@ -477,31 +488,31 @@
                 }
             }
 
-            // In-progress drawing
+            // Draw all placed manifolds
+            for (var mi = 0; mi < manifolds.length; mi++) {
+                drawManifoldMarker(manifolds[mi], manifolds[mi].id === activeManifoldId);
+            }
+
+            // In-progress drawing (boundary or zone polygon)
             if (currentPoints.length > 0) {
                 var border = mode === "boundary"
                     ? BOUNDARY_BORDER
                     : ZONE_BORDERS[zones.length % ZONE_BORDERS.length];
 
-                // In zone mode, first point is manifold (not part of polygon lines)
-                var drawFrom = (mode === "zones") ? 1 : 0;
-
                 // Draw placed lines
-                if (currentPoints.length > drawFrom) {
-                    ctx.beginPath();
-                    ctx.moveTo(currentPoints[drawFrom].x, currentPoints[drawFrom].y);
-                    for (var j = drawFrom + 1; j < currentPoints.length; j++) {
-                        ctx.lineTo(currentPoints[j].x, currentPoints[j].y);
-                    }
-                    ctx.strokeStyle = border;
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([6, 4]);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
+                for (var j = 1; j < currentPoints.length; j++) {
+                    ctx.lineTo(currentPoints[j].x, currentPoints[j].y);
                 }
+                ctx.strokeStyle = border;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 4]);
+                ctx.stroke();
+                ctx.setLineDash([]);
 
                 // Preview line from last point to cursor
-                if (mousePos && currentPoints.length > drawFrom) {
+                if (mousePos) {
                     var lastPt = currentPoints[currentPoints.length - 1];
                     ctx.beginPath();
                     ctx.moveTo(lastPt.x, lastPt.y);
@@ -516,32 +527,51 @@
                 }
 
                 // Draw dots at polygon points
-                for (var k = drawFrom; k < currentPoints.length; k++) {
+                for (var k = 0; k < currentPoints.length; k++) {
                     ctx.beginPath();
                     ctx.arc(currentPoints[k].x, currentPoints[k].y, 5, 0, Math.PI * 2);
                     ctx.fillStyle = border;
                     ctx.fill();
                 }
-
-                // In zone mode, draw manifold marker at first point
-                if (mode === "zones" && currentPoints.length >= 1) {
-                    var mp = currentPoints[0];
-                    ctx.beginPath();
-                    ctx.arc(mp.x, mp.y, 8, 0, Math.PI * 2);
-                    ctx.fillStyle = border;
-                    ctx.fill();
-                    ctx.beginPath();
-                    ctx.arc(mp.x, mp.y, 4, 0, Math.PI * 2);
-                    ctx.fillStyle = "white";
-                    ctx.fill();
-                    // Label
-                    ctx.font = "bold 10px Arial";
-                    ctx.fillStyle = border;
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "bottom";
-                    ctx.fillText("MANIFOLD", mp.x, mp.y - 11);
-                }
             }
+
+            // Show crosshair at cursor when placing manifold
+            if (mode === "placing_manifold" && mousePos) {
+                ctx.beginPath();
+                ctx.arc(mousePos.x, mousePos.y, 10, 0, Math.PI * 2);
+                ctx.strokeStyle = "#e74c3c";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(mousePos.x, mousePos.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = "#e74c3c";
+                ctx.fill();
+            }
+        }
+
+        function drawManifoldMarker(m, isActive) {
+            var color = isActive ? "#e74c3c" : "#555";
+            // Outer circle
+            ctx.beginPath();
+            ctx.arc(m.x, m.y, 9, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            // Inner circle
+            ctx.beginPath();
+            ctx.arc(m.x, m.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = "white";
+            ctx.fill();
+            // Center dot
+            ctx.beginPath();
+            ctx.arc(m.x, m.y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            // Label
+            ctx.font = "bold 10px Arial";
+            ctx.fillStyle = color;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(m.name, m.x, m.y - 12);
         }
 
         function drawPolygon(pts, fillColor, strokeColor, zone) {
@@ -577,21 +607,6 @@
                 ctx.fillText(zone.name, cx, cy - 9);
                 ctx.font = "12px Arial";
                 ctx.fillText(area.toFixed(1) + " " + u + "\u00B2", cx, cy + 9);
-
-                // Draw manifold marker
-                if (zone.manifold) {
-                    var m = zone.manifold;
-                    // Outer circle
-                    ctx.beginPath();
-                    ctx.arc(m.x, m.y, 8, 0, Math.PI * 2);
-                    ctx.fillStyle = zone.border;
-                    ctx.fill();
-                    // Inner circle
-                    ctx.beginPath();
-                    ctx.arc(m.x, m.y, 4, 0, Math.PI * 2);
-                    ctx.fillStyle = "white";
-                    ctx.fill();
-                }
             }
         }
 
@@ -615,13 +630,8 @@
         // =====================================================
 
         function finishCurrentShape() {
-            // In zone mode, first point is manifold, so need 1 + 3 = 4 minimum
-            var minPoints = (mode === "zones") ? 4 : 3;
-            if (currentPoints.length < minPoints) {
-                var msg = (mode === "zones")
-                    ? "You need at least 3 zone points after the manifold. Keep clicking."
-                    : "You need at least 3 points. Keep clicking to add more.";
-                alert(msg);
+            if (currentPoints.length < 3) {
+                alert("You need at least 3 points. Keep clicking to add more.");
                 return;
             }
 
@@ -641,17 +651,19 @@
                 redraw();
 
             } else if (mode === "zones") {
+                if (manifolds.length === 0) {
+                    alert("Please place a manifold first using the 'Place Manifold' button.");
+                    return;
+                }
+
                 var zoneNum = zones.length + 1;
                 var name = prompt("Name this heating zone:", "Zone " + zoneNum);
                 if (name === null) name = "Zone " + zoneNum;
 
                 var colorIdx = zones.length % ZONE_COLORS.length;
-                // First point placed was the manifold; zone polygon is the rest
-                var manifold = currentPoints[0];
-                var polyPts = currentPoints.slice(1);
                 zones.push({
-                    points: polyPts,
-                    manifold: manifold,
+                    points: currentPoints.slice(),
+                    manifoldId: activeManifoldId,
                     color: ZONE_COLORS[colorIdx],
                     border: ZONE_BORDERS[colorIdx],
                     name: name
@@ -678,11 +690,11 @@
         // Track cursor for preview line
         canvas.addEventListener("mousemove", function(e) {
             mousePos = getPos(e);
-            if (currentPoints.length > 0) redraw();
+            if (currentPoints.length > 0 || mode === "placing_manifold") redraw();
         });
         canvas.addEventListener("mouseleave", function() {
             mousePos = null;
-            if (currentPoints.length > 0) redraw();
+            if (currentPoints.length > 0 || mode === "placing_manifold") redraw();
         });
         canvas.addEventListener("touchmove", function(e) {
             e.preventDefault();
@@ -694,6 +706,19 @@
 
         canvas.addEventListener("click", function(e) {
             if (mode === "scale") return;
+
+            if (mode === "placing_manifold") {
+                var pos = getPos(e);
+                var mId = manifolds.length + 1;
+                var mName = "M" + mId;
+                manifolds.push({ id: mId, x: pos.x, y: pos.y, name: mName });
+                activeManifoldId = mId;
+                mode = "zones";
+                updateManifoldStatus();
+                redraw();
+                return;
+            }
+
             currentPoints.push(getPos(e));
             redraw();
         });
@@ -710,13 +735,26 @@
             e.preventDefault();
             if (mode === "scale") return;
             var now = Date.now();
+            var touch = e.changedTouches[0];
+            var pos = getPos({ clientX: touch.clientX, clientY: touch.clientY });
+
+            if (mode === "placing_manifold") {
+                var mId = manifolds.length + 1;
+                manifolds.push({ id: mId, x: pos.x, y: pos.y, name: "M" + mId });
+                activeManifoldId = mId;
+                mode = "zones";
+                updateManifoldStatus();
+                redraw();
+                lastTapTime = 0;
+                return;
+            }
+
             if (now - lastTapTime < 350) {
                 if (currentPoints.length > 0) currentPoints.pop();
                 finishCurrentShape();
                 lastTapTime = 0;
             } else {
-                var touch = e.changedTouches[0];
-                currentPoints.push(getPos({ clientX: touch.clientX, clientY: touch.clientY }));
+                currentPoints.push(pos);
                 redraw();
                 lastTapTime = now;
             }
@@ -732,7 +770,8 @@
         });
         document.getElementById("resetBoundaryBtn").addEventListener("click", function() {
             boundaryPoints = []; boundaryArea = null; currentPoints = [];
-            scale = 0; linearScale = 0; zones = [];
+            scale = 0; linearScale = 0; zones = []; manifolds = [];
+            activeManifoldId = null;
             pipePaths = []; pipesGenerated = false;
             mode = "boundary";
 
@@ -772,6 +811,33 @@
             redraw();
         });
 
+        // --- Step 3: Place Manifold button ---
+        document.getElementById("placeManifoldBtn").addEventListener("click", function() {
+            currentPoints = []; // cancel any in-progress zone
+            mode = "placing_manifold";
+            updateManifoldStatus();
+            redraw();
+        });
+
+        function updateManifoldStatus() {
+            var el = document.getElementById("manifoldStatus");
+            if (mode === "placing_manifold") {
+                el.textContent = "Click on the floor plan to place a manifold...";
+                el.style.color = "#e74c3c";
+            } else if (manifolds.length === 0) {
+                el.textContent = "";
+            } else {
+                var names = [];
+                for (var i = 0; i < manifolds.length; i++) names.push(manifolds[i].name);
+                var active = manifolds.length > 0
+                    ? manifolds.filter(function(m) { return m.id === activeManifoldId; })[0]
+                    : null;
+                el.textContent = "Manifolds: " + names.join(", ") +
+                    (active ? " (active: " + active.name + ")" : "");
+                el.style.color = "#27ae60";
+            }
+        }
+
         // --- Step 3 buttons ---
         document.getElementById("undoBtn").addEventListener("click", function() {
             if (currentPoints.length > 0) { currentPoints.pop(); redraw(); }
@@ -780,10 +846,13 @@
             currentPoints = []; redraw();
         });
         document.getElementById("clearBtn").addEventListener("click", function() {
-            if (zones.length === 0 && currentPoints.length === 0) return;
-            if (confirm("Remove all heating zones?")) {
-                zones = []; currentPoints = [];
+            if (zones.length === 0 && currentPoints.length === 0 && manifolds.length === 0) return;
+            if (confirm("Remove all manifolds and heating zones?")) {
+                zones = []; currentPoints = []; manifolds = [];
+                activeManifoldId = null;
                 pipePaths = []; pipesGenerated = false;
+                mode = "zones";
+                updateManifoldStatus();
                 document.getElementById("step4panel").classList.add("hidden");
                 document.getElementById("manifoldBox").classList.add("hidden");
                 document.getElementById("clearPipesBtn").classList.add("hidden");
@@ -891,10 +960,12 @@
                 totalFloorArea += area;
                 totalPipeLength += pipeLen;
 
+                var mName = findManifold(zones[i].manifoldId).name;
                 var row = document.createElement("tr");
                 row.innerHTML =
                     "<td>" + (i + 1) + "</td>" +
                     "<td>" + zones[i].name + "</td>" +
+                    "<td>" + mName + "</td>" +
                     "<td>" + area.toFixed(1) + " " + u + "\u00B2</td>" +
                     "<td>" + pipeLen.toFixed(1) + " " + u + "</td>" +
                     "<td>15 cm</td>" +
@@ -906,23 +977,34 @@
             var totalRow = document.createElement("tr");
             totalRow.className = "total-row";
             totalRow.innerHTML =
-                "<td colspan='2'>Total</td>" +
+                "<td colspan='3'>Total</td>" +
                 "<td>" + totalFloorArea.toFixed(1) + " " + u + "\u00B2</td>" +
                 "<td>" + totalPipeLength.toFixed(1) + " " + u + "</td>" +
                 "<td colspan='2'></td>";
             manifoldBody.appendChild(totalRow);
 
-            // Manifold size = number of zones (loops)
-            var manifoldSize = zones.length;
-
             // Spec summary
+            var loopsPerManifold = {};
+            for (var z = 0; z < zones.length; z++) {
+                var mid = zones[z].manifoldId;
+                loopsPerManifold[mid] = (loopsPerManifold[mid] || 0) + 1;
+            }
+            var manifoldSummary = "";
+            for (var mk = 0; mk < manifolds.length; mk++) {
+                var cnt = loopsPerManifold[manifolds[mk].id] || 0;
+                if (cnt > 0) {
+                    if (manifoldSummary) manifoldSummary += ", ";
+                    manifoldSummary += manifolds[mk].name + ": " + cnt + "-port";
+                }
+            }
+
             specGrid.innerHTML =
                 "<dt>Total Floor Area</dt><dd>" + totalFloorArea.toFixed(1) + " " + u + "\u00B2</dd>" +
-                "<dt>Manifold Size</dt><dd>" + manifoldSize + "-port</dd>" +
+                "<dt>Manifolds</dt><dd>" + manifoldSummary + "</dd>" +
                 "<dt>Total Pipe Length</dt><dd>" + totalPipeLength.toFixed(1) + " " + u + "</dd>" +
                 "<dt>Pipe Diameter</dt><dd>1.6 cm (16 mm)</dd>" +
                 "<dt>Pipe Spacing (C.T.C.)</dt><dd>15 cm</dd>" +
-                "<dt>Number of Loops</dt><dd>" + manifoldSize + "</dd>";
+                "<dt>Total Loops</dt><dd>" + zones.length + "</dd>";
         }
     })();
     </script>
