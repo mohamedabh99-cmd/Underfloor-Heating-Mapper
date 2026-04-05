@@ -309,7 +309,7 @@
         var zones = [];
         var currentPoints = [];
         var mousePos = null;    // current cursor position for line preview
-        var pipePaths = [];     // array of {path: [{x,y},...], lengthPx: number} per zone
+        var pipePaths = [];     // array of {supply, ret, serpentine, totalLenPx} per zone
         var pipesGenerated = false;
 
         // --- Shoelace formula ---
@@ -356,8 +356,22 @@
         }
 
         // =====================================================
-        // SERPENTINE PIPE GENERATION
+        // GRID-BASED ORTHOGONAL PIPE ROUTING
         // =====================================================
+
+        function polygonCentroid(pts) {
+            var cx = 0, cy = 0;
+            for (var i = 0; i < pts.length; i++) { cx += pts[i].x; cy += pts[i].y; }
+            return { x: cx / pts.length, y: cy / pts.length };
+        }
+
+        function pathLength(path) {
+            var len = 0;
+            for (var i = 0; i < path.length - 1; i++) {
+                len += Math.abs(path[i+1].x - path[i].x) + Math.abs(path[i+1].y - path[i].y);
+            }
+            return len;
+        }
 
         // Find all x-coordinates where a horizontal line at y intersects the polygon
         function scanLineIntersections(pts, y) {
@@ -376,229 +390,119 @@
             return xs;
         }
 
-        // Generate a serpentine pipe path within a polygon, starting from a manifold point
-        function generateSerpentine(pts, spacingPx, manifold) {
-            // Find bounding box
+        // Build orthogonal (H/V only) route from A to B via a horizontal trunk corridor
+        function buildOrthogonalRoute(from, to, trunkY) {
+            var route = [];
+            route.push({ x: from.x, y: from.y });
+            if (Math.abs(from.y - trunkY) > 1) route.push({ x: from.x, y: trunkY });
+            if (Math.abs(from.x - to.x) > 1) route.push({ x: to.x, y: trunkY });
+            if (Math.abs(trunkY - to.y) > 1) route.push({ x: to.x, y: to.y });
+            var clean = [route[0]];
+            for (var i = 1; i < route.length; i++) {
+                if (Math.abs(route[i].x - clean[clean.length-1].x) > 0.5 ||
+                    Math.abs(route[i].y - clean[clean.length-1].y) > 0.5) {
+                    clean.push(route[i]);
+                }
+            }
+            return clean;
+        }
+
+        // Offset a polyline perpendicular for parallel supply/return pipes
+        function offsetRoute(route, offset) {
+            if (route.length < 2) return route.slice();
+            var result = [];
+            for (var i = 0; i < route.length; i++) {
+                var dx = 0, dy = 0;
+                if (i < route.length - 1) {
+                    var sx = route[i+1].x - route[i].x;
+                    var sy = route[i+1].y - route[i].y;
+                    var len = Math.sqrt(sx*sx + sy*sy);
+                    if (len > 0) { dx = -sy/len * offset; dy = sx/len * offset; }
+                } else {
+                    var sx2 = route[i].x - route[i-1].x;
+                    var sy2 = route[i].y - route[i-1].y;
+                    var len2 = Math.sqrt(sx2*sx2 + sy2*sy2);
+                    if (len2 > 0) { dx = -sy2/len2 * offset; dy = sx2/len2 * offset; }
+                }
+                result.push({ x: route[i].x + dx, y: route[i].y + dy });
+            }
+            return result;
+        }
+
+        // Generate serpentine fill within a zone polygon
+        function generateSerpentineInZone(pts, spacingPx) {
             var minY = Infinity, maxY = -Infinity;
             for (var i = 0; i < pts.length; i++) {
                 if (pts[i].y < minY) minY = pts[i].y;
                 if (pts[i].y > maxY) maxY = pts[i].y;
             }
-
-            // Inset slightly so pipes don't sit exactly on the boundary
             var inset = spacingPx * 0.5;
             var startY = minY + inset;
             var endY = maxY - inset;
-
-            // Collect scan line segments
             var segments = [];
             for (var y = startY; y <= endY; y += spacingPx) {
                 var xs = scanLineIntersections(pts, y);
                 if (xs.length >= 2) {
                     var lx = xs[0] + inset;
                     var rx = xs[xs.length - 1] - inset;
-                    if (lx < rx) {
-                        segments.push({ y: y, left: lx, right: rx });
-                    }
+                    if (lx < rx) segments.push({ y: y, left: lx, right: rx });
                 }
             }
-
-            if (segments.length === 0) return { path: [], lengthPx: 0 };
-
-            // Find which segment is closest to the manifold point to decide
-            // which end of the serpentine to start from (top or bottom)
-            var distToFirst = Math.abs(segments[0].y - manifold.y);
-            var distToLast = Math.abs(segments[segments.length - 1].y - manifold.y);
-            if (distToLast < distToFirst) {
-                segments.reverse();
-            }
-
-            // Decide initial direction: start toward the side away from manifold
-            // so the first horizontal run goes away from it
-            var firstSeg = segments[0];
-            var midX = (firstSeg.left + firstSeg.right) / 2;
-            var goingRight = manifold.x <= midX;
-
-            // Build serpentine path
+            if (segments.length === 0) return [];
+            var goingRight = true;
             var serpentine = [];
-            var totalLen = 0;
-
             for (var s = 0; s < segments.length; s++) {
                 var seg = segments[s];
                 var sx = goingRight ? seg.left : seg.right;
                 var ex = goingRight ? seg.right : seg.left;
-
-                var p1 = { x: sx, y: seg.y };
-                var p2 = { x: ex, y: seg.y };
-
-                if (serpentine.length > 0) {
-                    var prev = serpentine[serpentine.length - 1];
-                    totalLen += Math.sqrt(
-                        Math.pow(p1.x - prev.x, 2) + Math.pow(p1.y - prev.y, 2)
-                    );
-                }
-
-                serpentine.push(p1);
-                serpentine.push(p2);
-                totalLen += Math.abs(ex - sx);
-
+                serpentine.push({ x: sx, y: seg.y });
+                serpentine.push({ x: ex, y: seg.y });
                 goingRight = !goingRight;
             }
-
-            // Add lead-in pipe from manifold to start of serpentine (wall-aware)
-            if (serpentine.length > 0) {
-                var first = serpentine[0];
-                var leadInPath = findPathAroundWalls(
-                    { x: manifold.x, y: manifold.y }, first
-                );
-                // Add lead-in length
-                for (var li = 0; li < leadInPath.length - 1; li++) {
-                    totalLen += Math.sqrt(
-                        Math.pow(leadInPath[li+1].x - leadInPath[li].x, 2) +
-                        Math.pow(leadInPath[li+1].y - leadInPath[li].y, 2)
-                    );
-                }
-                // Prepend lead-in path (skip last point, it's the serpentine start)
-                for (var lip = leadInPath.length - 2; lip >= 0; lip--) {
-                    serpentine.unshift(leadInPath[lip]);
-                }
-
-                // Add lead-out pipe from end of serpentine back to manifold (wall-aware)
-                var last = serpentine[serpentine.length - 1];
-                var leadOutPath = findPathAroundWalls(
-                    last, { x: manifold.x, y: manifold.y }
-                );
-                for (var lo = 0; lo < leadOutPath.length - 1; lo++) {
-                    totalLen += Math.sqrt(
-                        Math.pow(leadOutPath[lo+1].x - leadOutPath[lo].x, 2) +
-                        Math.pow(leadOutPath[lo+1].y - leadOutPath[lo].y, 2)
-                    );
-                }
-                // Append lead-out path (skip first point, it's the serpentine end)
-                for (var lop = 1; lop < leadOutPath.length; lop++) {
-                    serpentine.push(leadOutPath[lop]);
-                }
-            }
-
-            return { path: serpentine, lengthPx: totalLen, manifold: manifold };
+            return serpentine;
         }
 
-        // =====================================================
-        // WALL-AWARE PATHFINDING
-        // =====================================================
-
-        // Check if two line segments (p1-p2) and (p3-p4) intersect
-        function segmentsIntersect(p1, p2, p3, p4) {
-            var d1x = p2.x - p1.x, d1y = p2.y - p1.y;
-            var d2x = p4.x - p3.x, d2y = p4.y - p3.y;
-            var cross = d1x * d2y - d1y * d2x;
-            if (Math.abs(cross) < 1e-10) return false;
-            var t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / cross;
-            var u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / cross;
-            // Use small epsilon to avoid false positives at shared endpoints
-            return t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99;
-        }
-
-        // Check if line from a to b crosses any wall
-        function lineHitsWall(a, b) {
-            for (var w = 0; w < walls.length; w++) {
-                var wall = walls[w];
-                for (var s = 0; s < wall.length - 1; s++) {
-                    if (segmentsIntersect(a, b, wall[s], wall[s + 1])) return true;
-                }
+        // Generate full pipe layout for one zone
+        function generateZonePipes(zone, manifold, spacingPx, trunkY, pipeGap) {
+            var serpentine = generateSerpentineInZone(zone.points, spacingPx);
+            if (serpentine.length === 0) {
+                return { supply: [], ret: [], serpentine: [], totalLenPx: 0 };
             }
-            return false;
-        }
+            var serpStart = serpentine[0];
+            var serpEnd = serpentine[serpentine.length - 1];
 
-        // Find a path from start to end that avoids walls using a visibility graph
-        function findPathAroundWalls(start, end) {
-            if (walls.length === 0 || !lineHitsWall(start, end)) {
-                return [start, end];
-            }
+            // Supply: manifold -> trunk -> serpentine start
+            var supplyBase = buildOrthogonalRoute(
+                { x: manifold.x, y: manifold.y }, serpStart, trunkY
+            );
+            var supply = offsetRoute(supplyBase, -pipeGap / 2);
 
-            // Collect waypoints: wall endpoints offset slightly to each side
-            var waypoints = [start, end];
-            var offset = 8; // pixel offset from wall corners
+            // Return: serpentine end -> trunk -> manifold
+            var returnBase = buildOrthogonalRoute(
+                serpEnd, { x: manifold.x, y: manifold.y }, trunkY
+            );
+            var ret = offsetRoute(returnBase, pipeGap / 2);
 
-            for (var w = 0; w < walls.length; w++) {
-                var wall = walls[w];
-                for (var p = 0; p < wall.length; p++) {
-                    var pt = wall[p];
-                    // Add offset points in 4 directions around each wall point
-                    waypoints.push({ x: pt.x + offset, y: pt.y + offset });
-                    waypoints.push({ x: pt.x - offset, y: pt.y + offset });
-                    waypoints.push({ x: pt.x + offset, y: pt.y - offset });
-                    waypoints.push({ x: pt.x - offset, y: pt.y - offset });
-                }
-            }
-
-            var n = waypoints.length;
-
-            // Build adjacency: for each pair of waypoints, check if line-of-sight is clear
-            // Use Dijkstra with distance as cost
-            var dist = [];
-            var prev = [];
-            var visited = [];
-            for (var i = 0; i < n; i++) {
-                dist[i] = Infinity;
-                prev[i] = -1;
-                visited[i] = false;
-            }
-            dist[0] = 0; // start is index 0, end is index 1
-
-            for (var step = 0; step < n; step++) {
-                // Find unvisited node with smallest distance
-                var u = -1, best = Infinity;
-                for (var j = 0; j < n; j++) {
-                    if (!visited[j] && dist[j] < best) { best = dist[j]; u = j; }
-                }
-                if (u === -1 || u === 1) break; // done or unreachable
-
-                visited[u] = true;
-
-                // Relax neighbors
-                for (var v = 0; v < n; v++) {
-                    if (visited[v]) continue;
-                    if (lineHitsWall(waypoints[u], waypoints[v])) continue;
-                    var d = Math.sqrt(
-                        Math.pow(waypoints[v].x - waypoints[u].x, 2) +
-                        Math.pow(waypoints[v].y - waypoints[u].y, 2)
-                    );
-                    if (dist[u] + d < dist[v]) {
-                        dist[v] = dist[u] + d;
-                        prev[v] = u;
-                    }
-                }
-            }
-
-            // Reconstruct path from end (index 1) back to start (index 0)
-            if (dist[1] === Infinity) {
-                return [start, end]; // no path found, go direct
-            }
-
-            var path = [];
-            var cur = 1;
-            while (cur !== -1) {
-                path.unshift(waypoints[cur]);
-                cur = prev[cur];
-            }
-            return path;
+            var totalLen = pathLength(supply) + pathLength(serpentine) + pathLength(ret);
+            return { supply: supply, ret: ret, serpentine: serpentine, totalLenPx: totalLen };
         }
 
         function findManifold(id) {
             for (var i = 0; i < manifolds.length; i++) {
                 if (manifolds[i].id === id) return manifolds[i];
             }
-            return manifolds[0]; // fallback
+            return manifolds[0];
         }
 
         function regeneratePipes() {
             if (scale === 0 || zones.length === 0) return;
             var spacingPx = PIPE_CTC_M / linearScale;
+            var pipeGap = spacingPx * 0.4;
             pipePaths = [];
             for (var i = 0; i < zones.length; i++) {
                 var m = findManifold(zones[i].manifoldId);
-                pipePaths.push(generateSerpentine(zones[i].points, spacingPx, m));
+                var trunkY = m.y;
+                pipePaths.push(generateZonePipes(zones[i], m, spacingPx, trunkY, pipeGap, i));
             }
         }
 
@@ -650,10 +554,14 @@
                 drawPolygon(zones[i].points, zones[i].color, zones[i].border, zones[i]);
             }
 
-            // Pipe paths
+            // Pipe paths (supply=red, return=blue, serpentine=zone color)
             if (pipesGenerated) {
                 for (var p = 0; p < pipePaths.length; p++) {
-                    drawPipePath(pipePaths[p].path, PIPE_COLORS[p % PIPE_COLORS.length]);
+                    var pp = pipePaths[p];
+                    var zoneColor = PIPE_COLORS[p % PIPE_COLORS.length];
+                    drawPipePath(pp.supply, "#c0392b", 2, 1.0);   // supply = red
+                    drawPipePath(pp.serpentine, zoneColor, 1.5, 0.7); // serpentine = zone color
+                    drawPipePath(pp.ret, "#2471a3", 2, 1.0);      // return = blue
                 }
             }
 
@@ -791,17 +699,16 @@
             }
         }
 
-        function drawPipePath(path, color) {
-            if (path.length < 2) return;
-
+        function drawPipePath(path, color, width, alpha) {
+            if (!path || path.length < 2) return;
             ctx.beginPath();
             ctx.moveTo(path[0].x, path[0].y);
             for (var i = 1; i < path.length; i++) {
                 ctx.lineTo(path[i].x, path[i].y);
             }
             ctx.strokeStyle = color;
-            ctx.lineWidth = 1.5;
-            ctx.globalAlpha = 0.8;
+            ctx.lineWidth = width || 1.5;
+            ctx.globalAlpha = alpha || 0.8;
             ctx.stroke();
             ctx.globalAlpha = 1.0;
         }
@@ -1208,7 +1115,7 @@
             // Per-zone rows
             for (var i = 0; i < zones.length; i++) {
                 var area = pixelsToRealArea(polygonAreaPixels(zones[i].points));
-                var pipeLen = pixelsToRealLength(pipePaths[i] ? pipePaths[i].lengthPx : 0);
+                var pipeLen = pixelsToRealLength(pipePaths[i] ? pipePaths[i].totalLenPx : 0);
                 totalFloorArea += area;
                 totalPipeLength += pipeLen;
 
