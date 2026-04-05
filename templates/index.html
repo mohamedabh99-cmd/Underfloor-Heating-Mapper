@@ -16,13 +16,28 @@
         h1 { color: #2c3e50; }
         h2 { margin-top: 0; }
 
-        .upload-box, .toolbar, .zone-list {
+        .panel {
             background: white;
             padding: 20px 30px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
+
+        .step-number {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            width: 28px;
+            height: 28px;
+            line-height: 28px;
+            text-align: center;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 8px;
+        }
+        .step-number.done { background: #27ae60; }
 
         button {
             background: #3498db;
@@ -33,30 +48,29 @@
             cursor: pointer;
             font-size: 14px;
             margin-right: 8px;
+            margin-bottom: 6px;
         }
         button:hover { background: #2980b9; }
         button.danger { background: #e74c3c; }
         button.danger:hover { background: #c0392b; }
         button.secondary { background: #95a5a6; }
         button.secondary:hover { background: #7f8c8d; }
+        button.success { background: #27ae60; }
+        button.success:hover { background: #219a52; }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; }
 
         input[type="file"] { margin: 10px 0; }
 
-        /* The canvas container holds the image + drawing canvas stacked */
         .canvas-container {
             position: relative;
             display: inline-block;
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            /* Prevent long-press context menu on iPad */
             -webkit-touch-callout: none;
             touch-action: none;
         }
-        .canvas-container img {
-            display: block;
-            max-width: 100%;
-        }
+        .canvas-container img { display: block; max-width: 100%; }
         .canvas-container canvas {
             position: absolute;
             top: 0;
@@ -72,82 +86,65 @@
         }
         .zone-item:last-child { border-bottom: none; }
         .zone-color-dot {
-            width: 16px;
-            height: 16px;
+            width: 16px; height: 16px;
             border-radius: 50%;
             margin-right: 10px;
             flex-shrink: 0;
         }
         .zone-item span { flex-grow: 1; }
-        .zone-item button {
-            padding: 4px 12px;
-            font-size: 12px;
-            margin: 0;
-        }
+        .zone-item button { padding: 4px 12px; font-size: 12px; margin: 0; }
 
-        .help-text {
-            color: #777;
-            font-size: 14px;
-            margin: 8px 0;
-        }
+        .help-text { color: #777; font-size: 14px; margin: 8px 0; }
 
-        .scale-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 12px;
-            flex-wrap: wrap;
+        .area-input-row {
+            display: flex; align-items: center; gap: 10px;
+            margin: 12px 0; flex-wrap: wrap;
         }
-        .scale-row label { font-weight: bold; }
-        .scale-row input[type="number"] {
-            width: 80px;
-            padding: 6px 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
+        .area-input-row input[type="number"] {
+            width: 100px; padding: 8px 12px;
+            border: 1px solid #ccc; border-radius: 4px; font-size: 16px;
         }
-        .scale-row select {
-            padding: 6px 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .summary-box {
-            background: white;
-            padding: 20px 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .summary-box table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .summary-box th, .summary-box td {
-            text-align: left;
+        .area-input-row select {
             padding: 8px 12px;
-            border-bottom: 1px solid #eee;
+            border: 1px solid #ccc; border-radius: 4px; font-size: 16px;
         }
-        .summary-box th { color: #555; font-size: 13px; text-transform: uppercase; }
-        .summary-box .total-row td { font-weight: bold; border-top: 2px solid #333; border-bottom: none; }
+
+        .boundary-info {
+            background: #eaf7ee; border: 1px solid #27ae60;
+            border-radius: 6px; padding: 12px 18px; margin: 12px 0; color: #1e7e34;
+        }
+
+        .manifold-table {
+            width: 100%; border-collapse: collapse;
+        }
+        .manifold-table th, .manifold-table td {
+            text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee;
+        }
+        .manifold-table th { color: #555; font-size: 13px; text-transform: uppercase; }
+        .total-row td { font-weight: bold; border-top: 2px solid #333; border-bottom: none; }
+
         .area-badge {
-            background: #eef6fb;
-            color: #2980b9;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            margin-left: 8px;
+            background: #eef6fb; color: #2980b9;
+            padding: 2px 8px; border-radius: 4px;
+            font-size: 13px; font-weight: bold; margin-left: 8px;
         }
+
+        .spec-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 8px 20px; margin-bottom: 16px;
+        }
+        .spec-grid dt { font-weight: bold; color: #555; }
+        .spec-grid dd { margin: 0; font-size: 16px; }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <h1>Underfloor Heating Mapper</h1>
 
-    <!-- Upload form -->
-    <div class="upload-box">
-        <h2>Upload a Floor Plan</h2>
+    <!-- STEP 1: Upload -->
+    <div class="panel">
+        <h2><span class="step-number" id="step1num">1</span> Upload a Floor Plan</h2>
         <p>Select a JPG or PNG image of your floor plan.</p>
         <form method="post" enctype="multipart/form-data">
             <input type="file" name="floor_plan" accept=".jpg,.jpeg,.png" required>
@@ -157,26 +154,51 @@
     </div>
 
     {% if uploaded_image %}
-    <!-- Drawing toolbar -->
-    <div class="toolbar">
-        <h2>Draw Heating Zones</h2>
+    <!-- STEP 2: Draw property boundary -->
+    <div class="panel" id="step2panel">
+        <h2><span class="step-number" id="step2num">2</span> Draw Property Boundary</h2>
         <p class="help-text">
-            <strong>Tap/click</strong> on the floor plan to place points.
+            <strong>Tap/click</strong> around the outline of your entire property.
             <strong>Double-tap/double-click</strong> to close the shape.
+        </p>
+        <button id="undoBoundaryBtn" class="secondary">Undo Last Point</button>
+        <button id="cancelBoundaryBtn" class="secondary">Cancel</button>
+        <button id="resetBoundaryBtn" class="danger hidden">Redraw Boundary</button>
+
+        <div id="boundaryDoneSection" class="hidden">
+            <div class="boundary-info" id="boundaryInfo"></div>
+            <div class="area-input-row">
+                <label><strong>Total property area:</strong></label>
+                <input type="number" id="realArea" min="1" step="0.1" placeholder="e.g. 85">
+                <select id="areaUnit">
+                    <option value="m">m&sup2; (square meters)</option>
+                    <option value="ft">ft&sup2; (square feet)</option>
+                </select>
+            </div>
+            <button id="confirmScaleBtn" class="success">Set Scale &amp; Continue</button>
+        </div>
+    </div>
+
+    <!-- STEP 3: Draw heating zones -->
+    <div class="panel hidden" id="step3panel">
+        <h2><span class="step-number">3</span> Draw Heating Zones</h2>
+        <p class="help-text">
+            Draw individual heating zones inside the property boundary.
+            <strong>Tap/click</strong> to place points, <strong>double-tap/double-click</strong> to close each zone.
         </p>
         <button id="undoBtn" class="secondary">Undo Last Point</button>
         <button id="cancelBtn" class="secondary">Cancel Current Zone</button>
         <button id="clearBtn" class="danger">Clear All Zones</button>
+    </div>
 
-        <div class="scale-row">
-            <label for="scaleValue">Floor plan width:</label>
-            <input type="number" id="scaleValue" min="0.1" step="0.1" value="10" placeholder="e.g. 10">
-            <select id="scaleUnit">
-                <option value="m">meters (m)</option>
-                <option value="ft">feet (ft)</option>
-            </select>
-            <span class="help-text" style="margin:0;">Enter the real-world width of the image to get accurate area calculations.</span>
-        </div>
+    <!-- STEP 4: Generate pipes -->
+    <div class="panel hidden" id="step4panel">
+        <h2><span class="step-number">4</span> Generate Pipe Layout</h2>
+        <p class="help-text">
+            Generate serpentine pipe loops for all heating zones. Pipes are spaced 15 cm apart (center-to-center).
+        </p>
+        <button id="generateBtn" class="success">Generate Pipe Loops</button>
+        <button id="clearPipesBtn" class="danger hidden">Clear Pipes</button>
     </div>
 
     <!-- Floor plan with canvas overlay -->
@@ -185,42 +207,55 @@
         <canvas id="drawCanvas"></canvas>
     </div>
 
-    <!-- List of completed zones -->
-    <div class="zone-list" id="zoneList" style="display:none;">
+    <!-- Zone list -->
+    <div class="panel hidden" id="zoneList">
         <h2>Heating Zones</h2>
         <div id="zoneItems"></div>
     </div>
 
-    <!-- Coverage summary -->
-    <div class="summary-box" id="summaryBox" style="display:none;">
-        <h2>Coverage Summary</h2>
-        <table>
+    <!-- Manifold table -->
+    <div class="panel hidden" id="manifoldBox">
+        <h2>Manifold Schedule</h2>
+        <dl class="spec-grid" id="specGrid"></dl>
+        <table class="manifold-table">
             <thead>
-                <tr><th>Zone</th><th>Area</th><th>% of Floor Plan</th></tr>
+                <tr>
+                    <th>Group</th>
+                    <th>Zone</th>
+                    <th>Floor Area</th>
+                    <th>Pipe Length</th>
+                    <th>C.T.C.</th>
+                    <th>Pipe &empty;</th>
+                </tr>
             </thead>
-            <tbody id="summaryBody"></tbody>
+            <tbody id="manifoldBody"></tbody>
         </table>
     </div>
 
     <script>
     (function() {
+        // --- Constants ---
+        var PIPE_CTC_M = 0.15;       // 15 cm center-to-center
+        var PIPE_DIAMETER_CM = 1.6;   // pipe diameter
+
+        // --- State machine ---
+        var mode = "boundary";
+
         // --- Setup ---
         var img = document.getElementById("floorPlan");
         var canvas = document.getElementById("drawCanvas");
         var ctx = canvas.getContext("2d");
 
-        // Predefined colors for zones (semi-transparent)
         var ZONE_COLORS = [
-            "rgba(231, 76, 60, 0.3)",   // red
-            "rgba(46, 204, 113, 0.3)",   // green
-            "rgba(52, 152, 219, 0.3)",   // blue
-            "rgba(241, 196, 15, 0.3)",   // yellow
-            "rgba(155, 89, 182, 0.3)",   // purple
-            "rgba(230, 126, 34, 0.3)",   // orange
-            "rgba(26, 188, 156, 0.3)",   // teal
-            "rgba(236, 100, 164, 0.3)"   // pink
+            "rgba(231, 76, 60, 0.3)",
+            "rgba(46, 204, 113, 0.3)",
+            "rgba(52, 152, 219, 0.3)",
+            "rgba(241, 196, 15, 0.3)",
+            "rgba(155, 89, 182, 0.3)",
+            "rgba(230, 126, 34, 0.3)",
+            "rgba(26, 188, 156, 0.3)",
+            "rgba(236, 100, 164, 0.3)"
         ];
-        // Solid versions for outlines and dots
         var ZONE_BORDERS = [
             "rgba(231, 76, 60, 0.9)",
             "rgba(46, 204, 113, 0.9)",
@@ -231,19 +266,29 @@
             "rgba(26, 188, 156, 0.9)",
             "rgba(236, 100, 164, 0.9)"
         ];
+        var PIPE_COLORS = [
+            "#c0392b", "#1e8449", "#2471a3",
+            "#b7950b", "#7d3c98", "#ca6f1e",
+            "#148f77", "#cb4f85"
+        ];
+        var BOUNDARY_COLOR = "rgba(44, 62, 80, 0.15)";
+        var BOUNDARY_BORDER = "rgba(44, 62, 80, 0.9)";
 
-        var scaleInput = document.getElementById("scaleValue");
-        var unitSelect = document.getElementById("scaleUnit");
+        var boundaryPoints = [];
+        var boundaryArea = null;
+        var realAreaValue = 0;
+        var unit = "m";
+        var scale = 0;          // real sq-units per pixel sq-unit
+        var linearScale = 0;    // real units per pixel
 
-        var zones = [];          // Completed zones: [{points, color, border, name}]
-        var currentPoints = [];  // Points being drawn right now
+        var zones = [];
+        var currentPoints = [];
+        var pipePaths = [];     // array of {path: [{x,y},...], lengthPx: number} per zone
+        var pipesGenerated = false;
 
-        // --- Area calculation using the Shoelace formula ---
-        // This is a standard geometry formula that calculates the area of
-        // any polygon given its corner points.
+        // --- Shoelace formula ---
         function polygonAreaPixels(pts) {
-            var area = 0;
-            var n = pts.length;
+            var area = 0, n = pts.length;
             for (var i = 0; i < n; i++) {
                 var j = (i + 1) % n;
                 area += pts[i].x * pts[j].y;
@@ -252,226 +297,413 @@
             return Math.abs(area) / 2;
         }
 
-        // Convert pixel area to real-world area using the scale
         function pixelsToRealArea(pixelArea) {
-            var realWidth = parseFloat(scaleInput.value) || 10;
-            var pixelsPerUnit = canvas.width / realWidth;
-            return pixelArea / (pixelsPerUnit * pixelsPerUnit);
+            return scale === 0 ? 0 : pixelArea * scale;
         }
 
-        function getUnitLabel() {
-            return unitSelect.value === "ft" ? "ft" : "m";
+        function pixelsToRealLength(px) {
+            return linearScale === 0 ? 0 : px * linearScale;
         }
 
-        // Recalculate everything when scale changes
-        scaleInput.addEventListener("input", function() { redraw(); updateZoneList(); updateSummary(); });
-        unitSelect.addEventListener("change", function() { redraw(); updateZoneList(); updateSummary(); });
+        function getUnitLabel() { return unit === "ft" ? "ft" : "m"; }
 
-        // Resize canvas to match the displayed image size
+        // --- Canvas resize ---
         function resizeCanvas() {
             canvas.width = img.clientWidth;
             canvas.height = img.clientHeight;
+            if (pipesGenerated) regeneratePipes();
             redraw();
         }
-
         img.onload = resizeCanvas;
         window.addEventListener("resize", resizeCanvas);
-        // If the image is already cached and loaded
         if (img.complete) resizeCanvas();
 
-        // --- Coordinate helpers ---
-        // Convert a mouse/touch event to canvas-relative x,y
         function getPos(e) {
             var rect = canvas.getBoundingClientRect();
-            var clientX, clientY;
+            var cx, cy;
             if (e.touches && e.touches.length > 0) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
+                cx = e.touches[0].clientX; cy = e.touches[0].clientY;
             } else {
-                clientX = e.clientX;
-                clientY = e.clientY;
+                cx = e.clientX; cy = e.clientY;
             }
-            return {
-                x: clientX - rect.left,
-                y: clientY - rect.top
-            };
+            return { x: cx - rect.left, y: cy - rect.top };
         }
 
-        // --- Drawing ---
+        // =====================================================
+        // SERPENTINE PIPE GENERATION
+        // =====================================================
+
+        // Find all x-coordinates where a horizontal line at y intersects the polygon
+        function scanLineIntersections(pts, y) {
+            var xs = [];
+            var n = pts.length;
+            for (var i = 0; i < n; i++) {
+                var a = pts[i];
+                var b = pts[(i + 1) % n];
+                // Check if the scan line crosses this edge
+                if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) {
+                    var t = (y - a.y) / (b.y - a.y);
+                    xs.push(a.x + t * (b.x - a.x));
+                }
+            }
+            xs.sort(function(a, b) { return a - b; });
+            return xs;
+        }
+
+        // Generate a serpentine pipe path within a polygon
+        function generateSerpentine(pts, spacingPx) {
+            // Find bounding box
+            var minY = Infinity, maxY = -Infinity;
+            for (var i = 0; i < pts.length; i++) {
+                if (pts[i].y < minY) minY = pts[i].y;
+                if (pts[i].y > maxY) maxY = pts[i].y;
+            }
+
+            // Inset slightly so pipes don't sit exactly on the boundary
+            var inset = spacingPx * 0.5;
+            var startY = minY + inset;
+            var endY = maxY - inset;
+
+            // Collect scan line segments
+            var segments = [];
+            for (var y = startY; y <= endY; y += spacingPx) {
+                var xs = scanLineIntersections(pts, y);
+                // Pair up intersections (entry/exit)
+                // We take the outermost pair for simplicity (first and last)
+                if (xs.length >= 2) {
+                    // Inset the x values slightly
+                    var lx = xs[0] + inset;
+                    var rx = xs[xs.length - 1] - inset;
+                    if (lx < rx) {
+                        segments.push({ y: y, left: lx, right: rx });
+                    }
+                }
+            }
+
+            if (segments.length === 0) return { path: [], lengthPx: 0 };
+
+            // Build serpentine path
+            var path = [];
+            var totalLen = 0;
+            var goingRight = true;
+
+            for (var s = 0; s < segments.length; s++) {
+                var seg = segments[s];
+                var startX = goingRight ? seg.left : seg.right;
+                var endX = goingRight ? seg.right : seg.left;
+
+                var p1 = { x: startX, y: seg.y };
+                var p2 = { x: endX, y: seg.y };
+
+                // Add connector from previous point
+                if (path.length > 0) {
+                    var prev = path[path.length - 1];
+                    totalLen += Math.sqrt(
+                        Math.pow(p1.x - prev.x, 2) + Math.pow(p1.y - prev.y, 2)
+                    );
+                }
+
+                path.push(p1);
+                path.push(p2);
+                totalLen += Math.abs(endX - startX);
+
+                goingRight = !goingRight;
+            }
+
+            return { path: path, lengthPx: totalLen };
+        }
+
+        function regeneratePipes() {
+            if (scale === 0 || zones.length === 0) return;
+            var spacingPx = PIPE_CTC_M / linearScale;
+            pipePaths = [];
+            for (var i = 0; i < zones.length; i++) {
+                pipePaths.push(generateSerpentine(zones[i].points, spacingPx));
+            }
+        }
+
+        // =====================================================
+        // DRAWING
+        // =====================================================
+
         function redraw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw completed zones
-            for (var i = 0; i < zones.length; i++) {
-                drawZone(zones[i]);
+            // Boundary
+            if (boundaryPoints.length >= 3 && mode !== "boundary") {
+                drawPolygon(boundaryPoints, BOUNDARY_COLOR, BOUNDARY_BORDER, null);
             }
 
-            // Draw current in-progress zone
-            if (currentPoints.length > 0) {
-                var colorIdx = zones.length % ZONE_COLORS.length;
+            // Completed zones
+            for (var i = 0; i < zones.length; i++) {
+                drawPolygon(zones[i].points, zones[i].color, zones[i].border, zones[i]);
+            }
 
-                // Draw lines between placed points
+            // Pipe paths
+            if (pipesGenerated) {
+                for (var p = 0; p < pipePaths.length; p++) {
+                    drawPipePath(pipePaths[p].path, PIPE_COLORS[p % PIPE_COLORS.length]);
+                }
+            }
+
+            // In-progress drawing
+            if (currentPoints.length > 0) {
+                var border = mode === "boundary"
+                    ? BOUNDARY_BORDER
+                    : ZONE_BORDERS[zones.length % ZONE_BORDERS.length];
+
                 ctx.beginPath();
                 ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
                 for (var j = 1; j < currentPoints.length; j++) {
                     ctx.lineTo(currentPoints[j].x, currentPoints[j].y);
                 }
-                ctx.strokeStyle = ZONE_BORDERS[colorIdx];
+                ctx.strokeStyle = border;
                 ctx.lineWidth = 2;
                 ctx.setLineDash([6, 4]);
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Draw dots at each point
                 for (var k = 0; k < currentPoints.length; k++) {
                     ctx.beginPath();
                     ctx.arc(currentPoints[k].x, currentPoints[k].y, 5, 0, Math.PI * 2);
-                    ctx.fillStyle = ZONE_BORDERS[colorIdx];
+                    ctx.fillStyle = border;
                     ctx.fill();
                 }
             }
         }
 
-        function drawZone(zone) {
-            var pts = zone.points;
+        function drawPolygon(pts, fillColor, strokeColor, zone) {
             if (pts.length < 3) return;
 
-            // Filled polygon
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
-            for (var i = 1; i < pts.length; i++) {
-                ctx.lineTo(pts[i].x, pts[i].y);
-            }
+            for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
             ctx.closePath();
-            ctx.fillStyle = zone.color;
+            ctx.fillStyle = fillColor;
             ctx.fill();
-
-            // Outline
-            ctx.strokeStyle = zone.border;
+            ctx.strokeStyle = strokeColor;
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Label in the center
-            var cx = 0, cy = 0;
-            for (var j = 0; j < pts.length; j++) {
-                cx += pts[j].x;
-                cy += pts[j].y;
+            if (zone && scale > 0) {
+                var cx = 0, cy = 0;
+                for (var j = 0; j < pts.length; j++) { cx += pts[j].x; cy += pts[j].y; }
+                cx /= pts.length; cy /= pts.length;
+
+                var area = pixelsToRealArea(polygonAreaPixels(pts));
+                var u = getUnitLabel();
+
+                ctx.font = "bold 14px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = zone.border;
+                ctx.fillText(zone.name, cx, cy - 9);
+                ctx.font = "12px Arial";
+                ctx.fillText(area.toFixed(1) + " " + u + "\u00B2", cx, cy + 9);
             }
-            cx /= pts.length;
-            cy /= pts.length;
-
-            var realArea = pixelsToRealArea(polygonAreaPixels(pts));
-            var unit = getUnitLabel();
-            var label = zone.name;
-            var areaLabel = realArea.toFixed(1) + " " + unit + "\u00B2";
-
-            ctx.font = "bold 14px Arial";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillStyle = zone.border;
-            ctx.fillText(label, cx, cy - 9);
-            ctx.font = "12px Arial";
-            ctx.fillText(areaLabel, cx, cy + 9);
         }
 
-        // --- Zone completion ---
-        function finishZone() {
+        function drawPipePath(path, color) {
+            if (path.length < 2) return;
+
+            ctx.beginPath();
+            ctx.moveTo(path[0].x, path[0].y);
+            for (var i = 1; i < path.length; i++) {
+                ctx.lineTo(path[i].x, path[i].y);
+            }
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.8;
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        }
+
+        // =====================================================
+        // SHAPE FINISHING
+        // =====================================================
+
+        function finishCurrentShape() {
             if (currentPoints.length < 3) {
-                alert("A zone needs at least 3 points. Keep clicking to add more.");
+                alert("You need at least 3 points. Keep clicking to add more.");
                 return;
             }
 
-            var zoneNum = zones.length + 1;
-            var name = prompt("Name this heating zone:", "Zone " + zoneNum);
-            if (name === null) name = "Zone " + zoneNum;
+            if (mode === "boundary") {
+                boundaryPoints = currentPoints.slice();
+                boundaryArea = polygonAreaPixels(boundaryPoints);
+                currentPoints = [];
+                mode = "scale";
 
-            var colorIdx = zones.length % ZONE_COLORS.length;
-            zones.push({
-                points: currentPoints.slice(),
-                color: ZONE_COLORS[colorIdx],
-                border: ZONE_BORDERS[colorIdx],
-                name: name
-            });
+                document.getElementById("boundaryInfo").textContent =
+                    "Boundary drawn with " + boundaryPoints.length + " points.";
+                document.getElementById("boundaryDoneSection").classList.remove("hidden");
+                document.getElementById("undoBoundaryBtn").classList.add("hidden");
+                document.getElementById("cancelBoundaryBtn").classList.add("hidden");
+                document.getElementById("resetBoundaryBtn").classList.remove("hidden");
+                document.getElementById("step2num").classList.add("done");
+                redraw();
 
-            currentPoints = [];
-            redraw();
-            updateZoneList();
+            } else if (mode === "zones") {
+                var zoneNum = zones.length + 1;
+                var name = prompt("Name this heating zone:", "Zone " + zoneNum);
+                if (name === null) name = "Zone " + zoneNum;
+
+                var colorIdx = zones.length % ZONE_COLORS.length;
+                zones.push({
+                    points: currentPoints.slice(),
+                    color: ZONE_COLORS[colorIdx],
+                    border: ZONE_BORDERS[colorIdx],
+                    name: name
+                });
+                currentPoints = [];
+
+                // Clear old pipes when zones change
+                pipesGenerated = false;
+                pipePaths = [];
+                document.getElementById("clearPipesBtn").classList.add("hidden");
+                document.getElementById("generateBtn").disabled = false;
+                document.getElementById("manifoldBox").classList.add("hidden");
+
+                redraw();
+                updateZoneList();
+                document.getElementById("step4panel").classList.remove("hidden");
+            }
         }
 
-        // --- Event handlers ---
-        // Click to add a point
+        // =====================================================
+        // EVENT HANDLERS
+        // =====================================================
+
         canvas.addEventListener("click", function(e) {
-            var pos = getPos(e);
-            currentPoints.push(pos);
+            if (mode === "scale") return;
+            currentPoints.push(getPos(e));
             redraw();
         });
 
-        // Double-click to finish the zone
         canvas.addEventListener("dblclick", function(e) {
             e.preventDefault();
-            // The dblclick also fires two click events, so remove the extra point
+            if (mode === "scale") return;
             if (currentPoints.length > 0) currentPoints.pop();
-            finishZone();
+            finishCurrentShape();
         });
 
-        // Touch support for iPad
         var lastTapTime = 0;
         canvas.addEventListener("touchend", function(e) {
             e.preventDefault();
+            if (mode === "scale") return;
             var now = Date.now();
             if (now - lastTapTime < 350) {
-                // Double-tap: finish zone
                 if (currentPoints.length > 0) currentPoints.pop();
-                finishZone();
+                finishCurrentShape();
                 lastTapTime = 0;
             } else {
-                // Single tap: add point
-                var pos = getPos(e.changedTouches ? { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY } : e);
-                currentPoints.push(pos);
+                var touch = e.changedTouches[0];
+                currentPoints.push(getPos({ clientX: touch.clientX, clientY: touch.clientY }));
                 redraw();
                 lastTapTime = now;
             }
         });
+        canvas.addEventListener("touchstart", function(e) { e.preventDefault(); });
 
-        // Prevent scrolling when touching the canvas on iPad
-        canvas.addEventListener("touchstart", function(e) {
-            e.preventDefault();
+        // --- Step 2 buttons ---
+        document.getElementById("undoBoundaryBtn").addEventListener("click", function() {
+            if (currentPoints.length > 0) { currentPoints.pop(); redraw(); }
         });
-
-        // --- Toolbar buttons ---
-        document.getElementById("undoBtn").addEventListener("click", function() {
-            if (currentPoints.length > 0) {
-                currentPoints.pop();
-                redraw();
-            }
+        document.getElementById("cancelBoundaryBtn").addEventListener("click", function() {
+            currentPoints = []; redraw();
         });
+        document.getElementById("resetBoundaryBtn").addEventListener("click", function() {
+            boundaryPoints = []; boundaryArea = null; currentPoints = [];
+            scale = 0; linearScale = 0; zones = [];
+            pipePaths = []; pipesGenerated = false;
+            mode = "boundary";
 
-        document.getElementById("cancelBtn").addEventListener("click", function() {
-            currentPoints = [];
+            document.getElementById("boundaryDoneSection").classList.add("hidden");
+            document.getElementById("undoBoundaryBtn").classList.remove("hidden");
+            document.getElementById("cancelBoundaryBtn").classList.remove("hidden");
+            document.getElementById("resetBoundaryBtn").classList.add("hidden");
+            document.getElementById("step2num").classList.remove("done");
+            document.getElementById("step3panel").classList.add("hidden");
+            document.getElementById("step4panel").classList.add("hidden");
+            document.getElementById("zoneList").classList.add("hidden");
+            document.getElementById("manifoldBox").classList.add("hidden");
             redraw();
         });
 
+        // --- Step 2b: Confirm scale ---
+        document.getElementById("confirmScaleBtn").addEventListener("click", function() {
+            var areaVal = parseFloat(document.getElementById("realArea").value);
+            unit = document.getElementById("areaUnit").value;
+
+            if (!areaVal || areaVal <= 0) {
+                alert("Please enter the total property area (must be greater than 0).");
+                return;
+            }
+
+            realAreaValue = areaVal;
+            scale = realAreaValue / boundaryArea;
+            linearScale = Math.sqrt(scale);
+            mode = "zones";
+
+            document.getElementById("boundaryInfo").textContent =
+                "Property boundary set: " + realAreaValue + " " + getUnitLabel() + "\u00B2. Scale locked.";
+            document.getElementById("step3panel").classList.remove("hidden");
+            document.getElementById("realArea").disabled = true;
+            document.getElementById("areaUnit").disabled = true;
+            document.getElementById("confirmScaleBtn").disabled = true;
+            redraw();
+        });
+
+        // --- Step 3 buttons ---
+        document.getElementById("undoBtn").addEventListener("click", function() {
+            if (currentPoints.length > 0) { currentPoints.pop(); redraw(); }
+        });
+        document.getElementById("cancelBtn").addEventListener("click", function() {
+            currentPoints = []; redraw();
+        });
         document.getElementById("clearBtn").addEventListener("click", function() {
             if (zones.length === 0 && currentPoints.length === 0) return;
             if (confirm("Remove all heating zones?")) {
-                zones = [];
-                currentPoints = [];
-                redraw();
-                updateZoneList();
+                zones = []; currentPoints = [];
+                pipePaths = []; pipesGenerated = false;
+                document.getElementById("step4panel").classList.add("hidden");
+                document.getElementById("manifoldBox").classList.add("hidden");
+                document.getElementById("clearPipesBtn").classList.add("hidden");
+                redraw(); updateZoneList();
             }
         });
 
-        // --- Zone list panel ---
+        // --- Step 4: Generate pipes ---
+        document.getElementById("generateBtn").addEventListener("click", function() {
+            regeneratePipes();
+            pipesGenerated = true;
+            redraw();
+            updateManifoldTable();
+            document.getElementById("clearPipesBtn").classList.remove("hidden");
+        });
+
+        document.getElementById("clearPipesBtn").addEventListener("click", function() {
+            pipePaths = []; pipesGenerated = false;
+            document.getElementById("manifoldBox").classList.add("hidden");
+            document.getElementById("clearPipesBtn").classList.add("hidden");
+            document.getElementById("generateBtn").disabled = false;
+            redraw();
+        });
+
+        // =====================================================
+        // ZONE LIST
+        // =====================================================
+
         function updateZoneList() {
             var listDiv = document.getElementById("zoneList");
             var itemsDiv = document.getElementById("zoneItems");
 
             if (zones.length === 0) {
-                listDiv.style.display = "none";
+                listDiv.classList.add("hidden");
                 return;
             }
 
-            listDiv.style.display = "block";
+            listDiv.classList.remove("hidden");
             itemsDiv.innerHTML = "";
 
             for (var i = 0; i < zones.length; i++) {
@@ -484,19 +716,25 @@
                     dot.className = "zone-color-dot";
                     dot.style.backgroundColor = zone.border;
 
-                    var realArea = pixelsToRealArea(polygonAreaPixels(zone.points));
-                    var unit = getUnitLabel();
+                    var area = pixelsToRealArea(polygonAreaPixels(zone.points));
+                    var u = getUnitLabel();
 
                     var nameSpan = document.createElement("span");
-                    nameSpan.innerHTML = zone.name + " <span class='area-badge'>" + realArea.toFixed(1) + " " + unit + "\u00B2</span>";
+                    nameSpan.innerHTML = zone.name +
+                        " <span class='area-badge'>" + area.toFixed(1) + " " + u + "\u00B2</span>";
 
                     var delBtn = document.createElement("button");
                     delBtn.className = "danger";
                     delBtn.textContent = "Delete";
                     delBtn.addEventListener("click", function() {
                         zones.splice(idx, 1);
-                        redraw();
-                        updateZoneList();
+                        pipePaths = []; pipesGenerated = false;
+                        document.getElementById("manifoldBox").classList.add("hidden");
+                        document.getElementById("clearPipesBtn").classList.add("hidden");
+                        if (zones.length === 0) {
+                            document.getElementById("step4panel").classList.add("hidden");
+                        }
+                        redraw(); updateZoneList();
                     });
 
                     item.appendChild(dot);
@@ -505,49 +743,68 @@
                     itemsDiv.appendChild(item);
                 })(i);
             }
-
-            updateSummary();
         }
 
-        // --- Coverage summary table ---
-        function updateSummary() {
-            var summaryBox = document.getElementById("summaryBox");
-            var summaryBody = document.getElementById("summaryBody");
+        // =====================================================
+        // MANIFOLD TABLE
+        // =====================================================
 
-            if (zones.length === 0) {
-                summaryBox.style.display = "none";
+        function updateManifoldTable() {
+            var manifoldBox = document.getElementById("manifoldBox");
+            var specGrid = document.getElementById("specGrid");
+            var manifoldBody = document.getElementById("manifoldBody");
+
+            if (!pipesGenerated || zones.length === 0) {
+                manifoldBox.classList.add("hidden");
                 return;
             }
 
-            summaryBox.style.display = "block";
-            summaryBody.innerHTML = "";
+            manifoldBox.classList.remove("hidden");
+            manifoldBody.innerHTML = "";
 
-            var unit = getUnitLabel();
-            var totalImageArea = pixelsToRealArea(canvas.width * canvas.height);
-            var totalZoneArea = 0;
+            var u = getUnitLabel();
+            var totalFloorArea = 0;
+            var totalPipeLength = 0;
 
+            // Per-zone rows
             for (var i = 0; i < zones.length; i++) {
                 var area = pixelsToRealArea(polygonAreaPixels(zones[i].points));
-                totalZoneArea += area;
-                var pct = (area / totalImageArea * 100).toFixed(1);
+                var pipeLen = pixelsToRealLength(pipePaths[i] ? pipePaths[i].lengthPx : 0);
+                totalFloorArea += area;
+                totalPipeLength += pipeLen;
 
                 var row = document.createElement("tr");
                 row.innerHTML =
+                    "<td>" + (i + 1) + "</td>" +
                     "<td>" + zones[i].name + "</td>" +
-                    "<td>" + area.toFixed(1) + " " + unit + "\u00B2</td>" +
-                    "<td>" + pct + "%</td>";
-                summaryBody.appendChild(row);
+                    "<td>" + area.toFixed(1) + " " + u + "\u00B2</td>" +
+                    "<td>" + pipeLen.toFixed(1) + " " + u + "</td>" +
+                    "<td>15 cm</td>" +
+                    "<td>1.6 cm</td>";
+                manifoldBody.appendChild(row);
             }
 
             // Total row
-            var totalPct = (totalZoneArea / totalImageArea * 100).toFixed(1);
             var totalRow = document.createElement("tr");
             totalRow.className = "total-row";
             totalRow.innerHTML =
-                "<td>Total Coverage</td>" +
-                "<td>" + totalZoneArea.toFixed(1) + " " + unit + "\u00B2</td>" +
-                "<td>" + totalPct + "%</td>";
-            summaryBody.appendChild(totalRow);
+                "<td colspan='2'>Total</td>" +
+                "<td>" + totalFloorArea.toFixed(1) + " " + u + "\u00B2</td>" +
+                "<td>" + totalPipeLength.toFixed(1) + " " + u + "</td>" +
+                "<td colspan='2'></td>";
+            manifoldBody.appendChild(totalRow);
+
+            // Manifold size = number of zones (loops)
+            var manifoldSize = zones.length;
+
+            // Spec summary
+            specGrid.innerHTML =
+                "<dt>Total Floor Area</dt><dd>" + totalFloorArea.toFixed(1) + " " + u + "\u00B2</dd>" +
+                "<dt>Manifold Size</dt><dd>" + manifoldSize + "-port</dd>" +
+                "<dt>Total Pipe Length</dt><dd>" + totalPipeLength.toFixed(1) + " " + u + "</dd>" +
+                "<dt>Pipe Diameter</dt><dd>1.6 cm (16 mm)</dd>" +
+                "<dt>Pipe Spacing (C.T.C.)</dt><dd>15 cm</dd>" +
+                "<dt>Number of Loops</dt><dd>" + manifoldSize + "</dd>";
         }
     })();
     </script>
