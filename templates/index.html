@@ -183,8 +183,9 @@
     <div class="panel hidden" id="step3panel">
         <h2><span class="step-number">3</span> Draw Heating Zones</h2>
         <p class="help-text">
-            Draw individual heating zones inside the property boundary.
-            <strong>Tap/click</strong> to place points, <strong>double-tap/double-click</strong> to close each zone.
+            <strong>First click</strong> sets the manifold (pipe connection point).
+            Then click to draw the zone outline.
+            <strong>Double-tap/double-click</strong> to close each zone.
         </p>
         <button id="undoBtn" class="secondary">Undo Last Point</button>
         <button id="cancelBtn" class="secondary">Cancel Current Zone</button>
@@ -283,6 +284,7 @@
 
         var zones = [];
         var currentPoints = [];
+        var mousePos = null;    // current cursor position for line preview
         var pipePaths = [];     // array of {path: [{x,y},...], lengthPx: number} per zone
         var pipesGenerated = false;
 
@@ -350,8 +352,8 @@
             return xs;
         }
 
-        // Generate a serpentine pipe path within a polygon
-        function generateSerpentine(pts, spacingPx) {
+        // Generate a serpentine pipe path within a polygon, starting from a manifold point
+        function generateSerpentine(pts, spacingPx, manifold) {
             // Find bounding box
             var minY = Infinity, maxY = -Infinity;
             for (var i = 0; i < pts.length; i++) {
@@ -368,10 +370,7 @@
             var segments = [];
             for (var y = startY; y <= endY; y += spacingPx) {
                 var xs = scanLineIntersections(pts, y);
-                // Pair up intersections (entry/exit)
-                // We take the outermost pair for simplicity (first and last)
                 if (xs.length >= 2) {
-                    // Inset the x values slightly
                     var lx = xs[0] + inset;
                     var rx = xs[xs.length - 1] - inset;
                     if (lx < rx) {
@@ -382,35 +381,65 @@
 
             if (segments.length === 0) return { path: [], lengthPx: 0 };
 
+            // Find which segment is closest to the manifold point to decide
+            // which end of the serpentine to start from (top or bottom)
+            var distToFirst = Math.abs(segments[0].y - manifold.y);
+            var distToLast = Math.abs(segments[segments.length - 1].y - manifold.y);
+            if (distToLast < distToFirst) {
+                segments.reverse();
+            }
+
+            // Decide initial direction: start toward the side away from manifold
+            // so the first horizontal run goes away from it
+            var firstSeg = segments[0];
+            var midX = (firstSeg.left + firstSeg.right) / 2;
+            var goingRight = manifold.x <= midX;
+
             // Build serpentine path
-            var path = [];
+            var serpentine = [];
             var totalLen = 0;
-            var goingRight = true;
 
             for (var s = 0; s < segments.length; s++) {
                 var seg = segments[s];
-                var startX = goingRight ? seg.left : seg.right;
-                var endX = goingRight ? seg.right : seg.left;
+                var sx = goingRight ? seg.left : seg.right;
+                var ex = goingRight ? seg.right : seg.left;
 
-                var p1 = { x: startX, y: seg.y };
-                var p2 = { x: endX, y: seg.y };
+                var p1 = { x: sx, y: seg.y };
+                var p2 = { x: ex, y: seg.y };
 
-                // Add connector from previous point
-                if (path.length > 0) {
-                    var prev = path[path.length - 1];
+                if (serpentine.length > 0) {
+                    var prev = serpentine[serpentine.length - 1];
                     totalLen += Math.sqrt(
                         Math.pow(p1.x - prev.x, 2) + Math.pow(p1.y - prev.y, 2)
                     );
                 }
 
-                path.push(p1);
-                path.push(p2);
-                totalLen += Math.abs(endX - startX);
+                serpentine.push(p1);
+                serpentine.push(p2);
+                totalLen += Math.abs(ex - sx);
 
                 goingRight = !goingRight;
             }
 
-            return { path: path, lengthPx: totalLen };
+            // Add lead-in pipe from manifold to start of serpentine
+            if (serpentine.length > 0) {
+                var first = serpentine[0];
+                var leadIn = Math.sqrt(
+                    Math.pow(first.x - manifold.x, 2) + Math.pow(first.y - manifold.y, 2)
+                );
+                totalLen += leadIn;
+                serpentine.unshift({ x: manifold.x, y: manifold.y });
+
+                // Add lead-out pipe from end of serpentine back to manifold
+                var last = serpentine[serpentine.length - 1];
+                var leadOut = Math.sqrt(
+                    Math.pow(last.x - manifold.x, 2) + Math.pow(last.y - manifold.y, 2)
+                );
+                totalLen += leadOut;
+                serpentine.push({ x: manifold.x, y: manifold.y });
+            }
+
+            return { path: serpentine, lengthPx: totalLen, manifold: manifold };
         }
 
         function regeneratePipes() {
@@ -418,7 +447,9 @@
             var spacingPx = PIPE_CTC_M / linearScale;
             pipePaths = [];
             for (var i = 0; i < zones.length; i++) {
-                pipePaths.push(generateSerpentine(zones[i].points, spacingPx));
+                pipePaths.push(generateSerpentine(
+                    zones[i].points, spacingPx, zones[i].manifold
+                ));
             }
         }
 
@@ -452,22 +483,63 @@
                     ? BOUNDARY_BORDER
                     : ZONE_BORDERS[zones.length % ZONE_BORDERS.length];
 
-                ctx.beginPath();
-                ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
-                for (var j = 1; j < currentPoints.length; j++) {
-                    ctx.lineTo(currentPoints[j].x, currentPoints[j].y);
-                }
-                ctx.strokeStyle = border;
-                ctx.lineWidth = 2;
-                ctx.setLineDash([6, 4]);
-                ctx.stroke();
-                ctx.setLineDash([]);
+                // In zone mode, first point is manifold (not part of polygon lines)
+                var drawFrom = (mode === "zones") ? 1 : 0;
 
-                for (var k = 0; k < currentPoints.length; k++) {
+                // Draw placed lines
+                if (currentPoints.length > drawFrom) {
+                    ctx.beginPath();
+                    ctx.moveTo(currentPoints[drawFrom].x, currentPoints[drawFrom].y);
+                    for (var j = drawFrom + 1; j < currentPoints.length; j++) {
+                        ctx.lineTo(currentPoints[j].x, currentPoints[j].y);
+                    }
+                    ctx.strokeStyle = border;
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([6, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Preview line from last point to cursor
+                if (mousePos && currentPoints.length > drawFrom) {
+                    var lastPt = currentPoints[currentPoints.length - 1];
+                    ctx.beginPath();
+                    ctx.moveTo(lastPt.x, lastPt.y);
+                    ctx.lineTo(mousePos.x, mousePos.y);
+                    ctx.strokeStyle = border;
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = 0.5;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.globalAlpha = 1.0;
+                }
+
+                // Draw dots at polygon points
+                for (var k = drawFrom; k < currentPoints.length; k++) {
                     ctx.beginPath();
                     ctx.arc(currentPoints[k].x, currentPoints[k].y, 5, 0, Math.PI * 2);
                     ctx.fillStyle = border;
                     ctx.fill();
+                }
+
+                // In zone mode, draw manifold marker at first point
+                if (mode === "zones" && currentPoints.length >= 1) {
+                    var mp = currentPoints[0];
+                    ctx.beginPath();
+                    ctx.arc(mp.x, mp.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = border;
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(mp.x, mp.y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = "white";
+                    ctx.fill();
+                    // Label
+                    ctx.font = "bold 10px Arial";
+                    ctx.fillStyle = border;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "bottom";
+                    ctx.fillText("MANIFOLD", mp.x, mp.y - 11);
                 }
             }
         }
@@ -479,8 +551,13 @@
             ctx.moveTo(pts[0].x, pts[0].y);
             for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
             ctx.closePath();
-            ctx.fillStyle = fillColor;
-            ctx.fill();
+
+            // Only fill the boundary, not heating zones (so floor plan is visible)
+            if (!zone) {
+                ctx.fillStyle = fillColor;
+                ctx.fill();
+            }
+
             ctx.strokeStyle = strokeColor;
             ctx.lineWidth = 2;
             ctx.stroke();
@@ -500,6 +577,21 @@
                 ctx.fillText(zone.name, cx, cy - 9);
                 ctx.font = "12px Arial";
                 ctx.fillText(area.toFixed(1) + " " + u + "\u00B2", cx, cy + 9);
+
+                // Draw manifold marker
+                if (zone.manifold) {
+                    var m = zone.manifold;
+                    // Outer circle
+                    ctx.beginPath();
+                    ctx.arc(m.x, m.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = zone.border;
+                    ctx.fill();
+                    // Inner circle
+                    ctx.beginPath();
+                    ctx.arc(m.x, m.y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = "white";
+                    ctx.fill();
+                }
             }
         }
 
@@ -523,8 +615,13 @@
         // =====================================================
 
         function finishCurrentShape() {
-            if (currentPoints.length < 3) {
-                alert("You need at least 3 points. Keep clicking to add more.");
+            // In zone mode, first point is manifold, so need 1 + 3 = 4 minimum
+            var minPoints = (mode === "zones") ? 4 : 3;
+            if (currentPoints.length < minPoints) {
+                var msg = (mode === "zones")
+                    ? "You need at least 3 zone points after the manifold. Keep clicking."
+                    : "You need at least 3 points. Keep clicking to add more.";
+                alert(msg);
                 return;
             }
 
@@ -549,8 +646,12 @@
                 if (name === null) name = "Zone " + zoneNum;
 
                 var colorIdx = zones.length % ZONE_COLORS.length;
+                // First point placed was the manifold; zone polygon is the rest
+                var manifold = currentPoints[0];
+                var polyPts = currentPoints.slice(1);
                 zones.push({
-                    points: currentPoints.slice(),
+                    points: polyPts,
+                    manifold: manifold,
                     color: ZONE_COLORS[colorIdx],
                     border: ZONE_BORDERS[colorIdx],
                     name: name
@@ -573,6 +674,23 @@
         // =====================================================
         // EVENT HANDLERS
         // =====================================================
+
+        // Track cursor for preview line
+        canvas.addEventListener("mousemove", function(e) {
+            mousePos = getPos(e);
+            if (currentPoints.length > 0) redraw();
+        });
+        canvas.addEventListener("mouseleave", function() {
+            mousePos = null;
+            if (currentPoints.length > 0) redraw();
+        });
+        canvas.addEventListener("touchmove", function(e) {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                mousePos = getPos(e);
+                if (currentPoints.length > 0) redraw();
+            }
+        });
 
         canvas.addEventListener("click", function(e) {
             if (mode === "scale") return;
