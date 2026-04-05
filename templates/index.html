@@ -179,9 +179,23 @@
         </div>
     </div>
 
-    <!-- STEP 3: Draw heating zones -->
+    <!-- STEP 3: Draw walls -->
     <div class="panel hidden" id="step3panel">
-        <h2><span class="step-number">3</span> Place Manifolds &amp; Draw Heating Zones</h2>
+        <h2><span class="step-number" id="step3num">3</span> Draw Walls</h2>
+        <p class="help-text">
+            Draw interior walls and obstacles. <strong>Click</strong> to place wall points,
+            <strong>double-click</strong> to finish each wall line. Pipes will route around these walls.
+        </p>
+        <button id="undoWallBtn" class="secondary">Undo Last Point</button>
+        <button id="cancelWallBtn" class="secondary">Cancel Current Wall</button>
+        <button id="clearWallsBtn" class="danger">Clear All Walls</button>
+        <button id="doneWallsBtn" class="success">Done &mdash; Continue to Zones</button>
+        <p class="help-text" id="wallCount"></p>
+    </div>
+
+    <!-- STEP 4: Place manifolds & draw heating zones -->
+    <div class="panel hidden" id="step4panel">
+        <h2><span class="step-number">4</span> Place Manifolds &amp; Draw Heating Zones</h2>
         <p class="help-text">
             First, place one or more manifolds. Then draw zones &mdash; each zone connects to the most recently placed manifold.
         </p>
@@ -193,9 +207,9 @@
         <button id="clearBtn" class="danger">Clear All Zones</button>
     </div>
 
-    <!-- STEP 4: Generate pipes -->
-    <div class="panel hidden" id="step4panel">
-        <h2><span class="step-number">4</span> Generate Pipe Layout</h2>
+    <!-- STEP 5: Generate pipes -->
+    <div class="panel hidden" id="step5panel">
+        <h2><span class="step-number">5</span> Generate Pipe Layout</h2>
         <p class="help-text">
             Generate serpentine pipe loops for all heating zones. Pipes are spaced 15 cm apart (center-to-center).
         </p>
@@ -242,7 +256,7 @@
         var PIPE_DIAMETER_CM = 1.6;   // pipe diameter
 
         // --- State machine ---
-        // "boundary" | "scale" | "zones" | "placing_manifold"
+        // "boundary" | "scale" | "walls" | "zones" | "placing_manifold"
         var mode = "boundary";
 
         // --- Setup ---
@@ -284,6 +298,11 @@
         var unit = "m";
         var scale = 0;          // real sq-units per pixel sq-unit
         var linearScale = 0;    // real units per pixel
+
+        var walls = [];             // array of polylines: [{x,y}, ...]
+        var wallPoints = [];        // current wall being drawn
+        var WALL_COLOR = "#2c3e50"; // dark color for walls
+        var WALL_WIDTH = 3;
 
         var manifolds = [];         // [{id, x, y, name}]
         var activeManifoldId = null; // which manifold new zones connect to
@@ -426,25 +445,144 @@
                 goingRight = !goingRight;
             }
 
-            // Add lead-in pipe from manifold to start of serpentine
+            // Add lead-in pipe from manifold to start of serpentine (wall-aware)
             if (serpentine.length > 0) {
                 var first = serpentine[0];
-                var leadIn = Math.sqrt(
-                    Math.pow(first.x - manifold.x, 2) + Math.pow(first.y - manifold.y, 2)
+                var leadInPath = findPathAroundWalls(
+                    { x: manifold.x, y: manifold.y }, first
                 );
-                totalLen += leadIn;
-                serpentine.unshift({ x: manifold.x, y: manifold.y });
+                // Add lead-in length
+                for (var li = 0; li < leadInPath.length - 1; li++) {
+                    totalLen += Math.sqrt(
+                        Math.pow(leadInPath[li+1].x - leadInPath[li].x, 2) +
+                        Math.pow(leadInPath[li+1].y - leadInPath[li].y, 2)
+                    );
+                }
+                // Prepend lead-in path (skip last point, it's the serpentine start)
+                for (var lip = leadInPath.length - 2; lip >= 0; lip--) {
+                    serpentine.unshift(leadInPath[lip]);
+                }
 
-                // Add lead-out pipe from end of serpentine back to manifold
+                // Add lead-out pipe from end of serpentine back to manifold (wall-aware)
                 var last = serpentine[serpentine.length - 1];
-                var leadOut = Math.sqrt(
-                    Math.pow(last.x - manifold.x, 2) + Math.pow(last.y - manifold.y, 2)
+                var leadOutPath = findPathAroundWalls(
+                    last, { x: manifold.x, y: manifold.y }
                 );
-                totalLen += leadOut;
-                serpentine.push({ x: manifold.x, y: manifold.y });
+                for (var lo = 0; lo < leadOutPath.length - 1; lo++) {
+                    totalLen += Math.sqrt(
+                        Math.pow(leadOutPath[lo+1].x - leadOutPath[lo].x, 2) +
+                        Math.pow(leadOutPath[lo+1].y - leadOutPath[lo].y, 2)
+                    );
+                }
+                // Append lead-out path (skip first point, it's the serpentine end)
+                for (var lop = 1; lop < leadOutPath.length; lop++) {
+                    serpentine.push(leadOutPath[lop]);
+                }
             }
 
             return { path: serpentine, lengthPx: totalLen, manifold: manifold };
+        }
+
+        // =====================================================
+        // WALL-AWARE PATHFINDING
+        // =====================================================
+
+        // Check if two line segments (p1-p2) and (p3-p4) intersect
+        function segmentsIntersect(p1, p2, p3, p4) {
+            var d1x = p2.x - p1.x, d1y = p2.y - p1.y;
+            var d2x = p4.x - p3.x, d2y = p4.y - p3.y;
+            var cross = d1x * d2y - d1y * d2x;
+            if (Math.abs(cross) < 1e-10) return false;
+            var t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / cross;
+            var u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / cross;
+            // Use small epsilon to avoid false positives at shared endpoints
+            return t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99;
+        }
+
+        // Check if line from a to b crosses any wall
+        function lineHitsWall(a, b) {
+            for (var w = 0; w < walls.length; w++) {
+                var wall = walls[w];
+                for (var s = 0; s < wall.length - 1; s++) {
+                    if (segmentsIntersect(a, b, wall[s], wall[s + 1])) return true;
+                }
+            }
+            return false;
+        }
+
+        // Find a path from start to end that avoids walls using a visibility graph
+        function findPathAroundWalls(start, end) {
+            if (walls.length === 0 || !lineHitsWall(start, end)) {
+                return [start, end];
+            }
+
+            // Collect waypoints: wall endpoints offset slightly to each side
+            var waypoints = [start, end];
+            var offset = 8; // pixel offset from wall corners
+
+            for (var w = 0; w < walls.length; w++) {
+                var wall = walls[w];
+                for (var p = 0; p < wall.length; p++) {
+                    var pt = wall[p];
+                    // Add offset points in 4 directions around each wall point
+                    waypoints.push({ x: pt.x + offset, y: pt.y + offset });
+                    waypoints.push({ x: pt.x - offset, y: pt.y + offset });
+                    waypoints.push({ x: pt.x + offset, y: pt.y - offset });
+                    waypoints.push({ x: pt.x - offset, y: pt.y - offset });
+                }
+            }
+
+            var n = waypoints.length;
+
+            // Build adjacency: for each pair of waypoints, check if line-of-sight is clear
+            // Use Dijkstra with distance as cost
+            var dist = [];
+            var prev = [];
+            var visited = [];
+            for (var i = 0; i < n; i++) {
+                dist[i] = Infinity;
+                prev[i] = -1;
+                visited[i] = false;
+            }
+            dist[0] = 0; // start is index 0, end is index 1
+
+            for (var step = 0; step < n; step++) {
+                // Find unvisited node with smallest distance
+                var u = -1, best = Infinity;
+                for (var j = 0; j < n; j++) {
+                    if (!visited[j] && dist[j] < best) { best = dist[j]; u = j; }
+                }
+                if (u === -1 || u === 1) break; // done or unreachable
+
+                visited[u] = true;
+
+                // Relax neighbors
+                for (var v = 0; v < n; v++) {
+                    if (visited[v]) continue;
+                    if (lineHitsWall(waypoints[u], waypoints[v])) continue;
+                    var d = Math.sqrt(
+                        Math.pow(waypoints[v].x - waypoints[u].x, 2) +
+                        Math.pow(waypoints[v].y - waypoints[u].y, 2)
+                    );
+                    if (dist[u] + d < dist[v]) {
+                        dist[v] = dist[u] + d;
+                        prev[v] = u;
+                    }
+                }
+            }
+
+            // Reconstruct path from end (index 1) back to start (index 0)
+            if (dist[1] === Infinity) {
+                return [start, end]; // no path found, go direct
+            }
+
+            var path = [];
+            var cur = 1;
+            while (cur !== -1) {
+                path.unshift(waypoints[cur]);
+                cur = prev[cur];
+            }
+            return path;
         }
 
         function findManifold(id) {
@@ -474,6 +612,37 @@
             // Boundary
             if (boundaryPoints.length >= 3 && mode !== "boundary") {
                 drawPolygon(boundaryPoints, BOUNDARY_COLOR, BOUNDARY_BORDER, null);
+            }
+
+            // Draw completed walls
+            for (var wi = 0; wi < walls.length; wi++) {
+                drawWall(walls[wi]);
+            }
+
+            // Draw in-progress wall
+            if (mode === "walls" && wallPoints.length > 0) {
+                drawWall(wallPoints);
+                // Preview line for wall
+                if (mousePos) {
+                    var wLast = wallPoints[wallPoints.length - 1];
+                    ctx.beginPath();
+                    ctx.moveTo(wLast.x, wLast.y);
+                    ctx.lineTo(mousePos.x, mousePos.y);
+                    ctx.strokeStyle = WALL_COLOR;
+                    ctx.lineWidth = WALL_WIDTH;
+                    ctx.globalAlpha = 0.4;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.globalAlpha = 1.0;
+                }
+                // Dots on wall points
+                for (var wd = 0; wd < wallPoints.length; wd++) {
+                    ctx.beginPath();
+                    ctx.arc(wallPoints[wd].x, wallPoints[wd].y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = WALL_COLOR;
+                    ctx.fill();
+                }
             }
 
             // Completed zones
@@ -572,6 +741,18 @@
             ctx.textAlign = "center";
             ctx.textBaseline = "bottom";
             ctx.fillText(m.name, m.x, m.y - 12);
+        }
+
+        function drawWall(pts) {
+            if (pts.length < 2) return;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.strokeStyle = WALL_COLOR;
+            ctx.lineWidth = WALL_WIDTH;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.stroke();
         }
 
         function drawPolygon(pts, fillColor, strokeColor, zone) {
@@ -679,7 +860,7 @@
 
                 redraw();
                 updateZoneList();
-                document.getElementById("step4panel").classList.remove("hidden");
+                document.getElementById("step5panel").classList.remove("hidden");
             }
         }
 
@@ -690,11 +871,11 @@
         // Track cursor for preview line
         canvas.addEventListener("mousemove", function(e) {
             mousePos = getPos(e);
-            if (currentPoints.length > 0 || mode === "placing_manifold") redraw();
+            if (currentPoints.length > 0 || wallPoints.length > 0 || mode === "placing_manifold") redraw();
         });
         canvas.addEventListener("mouseleave", function() {
             mousePos = null;
-            if (currentPoints.length > 0 || mode === "placing_manifold") redraw();
+            if (currentPoints.length > 0 || wallPoints.length > 0 || mode === "placing_manifold") redraw();
         });
         canvas.addEventListener("touchmove", function(e) {
             e.preventDefault();
@@ -706,6 +887,12 @@
 
         canvas.addEventListener("click", function(e) {
             if (mode === "scale") return;
+
+            if (mode === "walls") {
+                wallPoints.push(getPos(e));
+                redraw();
+                return;
+            }
 
             if (mode === "placing_manifold") {
                 var pos = getPos(e);
@@ -726,6 +913,18 @@
         canvas.addEventListener("dblclick", function(e) {
             e.preventDefault();
             if (mode === "scale") return;
+
+            if (mode === "walls") {
+                if (wallPoints.length > 0) wallPoints.pop(); // remove dblclick duplicate
+                if (wallPoints.length >= 2) {
+                    walls.push(wallPoints.slice());
+                    wallPoints = [];
+                    updateWallCount();
+                    redraw();
+                }
+                return;
+            }
+
             if (currentPoints.length > 0) currentPoints.pop();
             finishCurrentShape();
         });
@@ -737,6 +936,24 @@
             var now = Date.now();
             var touch = e.changedTouches[0];
             var pos = getPos({ clientX: touch.clientX, clientY: touch.clientY });
+
+            if (mode === "walls") {
+                if (now - lastTapTime < 350) {
+                    if (wallPoints.length > 0) wallPoints.pop();
+                    if (wallPoints.length >= 2) {
+                        walls.push(wallPoints.slice());
+                        wallPoints = [];
+                        updateWallCount();
+                        redraw();
+                    }
+                    lastTapTime = 0;
+                } else {
+                    wallPoints.push(pos);
+                    redraw();
+                    lastTapTime = now;
+                }
+                return;
+            }
 
             if (mode === "placing_manifold") {
                 var mId = manifolds.length + 1;
@@ -771,7 +988,7 @@
         document.getElementById("resetBoundaryBtn").addEventListener("click", function() {
             boundaryPoints = []; boundaryArea = null; currentPoints = [];
             scale = 0; linearScale = 0; zones = []; manifolds = [];
-            activeManifoldId = null;
+            activeManifoldId = null; walls = []; wallPoints = [];
             pipePaths = []; pipesGenerated = false;
             mode = "boundary";
 
@@ -782,6 +999,7 @@
             document.getElementById("step2num").classList.remove("done");
             document.getElementById("step3panel").classList.add("hidden");
             document.getElementById("step4panel").classList.add("hidden");
+            document.getElementById("step5panel").classList.add("hidden");
             document.getElementById("zoneList").classList.add("hidden");
             document.getElementById("manifoldBox").classList.add("hidden");
             redraw();
@@ -800,7 +1018,7 @@
             realAreaValue = areaVal;
             scale = realAreaValue / boundaryArea;
             linearScale = Math.sqrt(scale);
-            mode = "zones";
+            mode = "walls";
 
             document.getElementById("boundaryInfo").textContent =
                 "Property boundary set: " + realAreaValue + " " + getUnitLabel() + "\u00B2. Scale locked.";
@@ -811,7 +1029,41 @@
             redraw();
         });
 
-        // --- Step 3: Place Manifold button ---
+        // --- Step 3: Wall buttons ---
+        document.getElementById("undoWallBtn").addEventListener("click", function() {
+            if (wallPoints.length > 0) { wallPoints.pop(); redraw(); }
+        });
+        document.getElementById("cancelWallBtn").addEventListener("click", function() {
+            wallPoints = []; redraw();
+        });
+        document.getElementById("clearWallsBtn").addEventListener("click", function() {
+            if (walls.length === 0 && wallPoints.length === 0) return;
+            if (confirm("Remove all walls?")) {
+                walls = []; wallPoints = [];
+                updateWallCount(); redraw();
+            }
+        });
+        document.getElementById("doneWallsBtn").addEventListener("click", function() {
+            // Finish any in-progress wall
+            if (wallPoints.length >= 2) {
+                walls.push(wallPoints.slice());
+                wallPoints = [];
+            }
+            mode = "zones";
+            document.getElementById("step3num").classList.add("done");
+            document.getElementById("step4panel").classList.remove("hidden");
+            updateWallCount();
+            redraw();
+        });
+
+        function updateWallCount() {
+            var el = document.getElementById("wallCount");
+            el.textContent = walls.length === 0
+                ? "No walls drawn yet. Click 'Done' to skip."
+                : walls.length + " wall(s) drawn.";
+        }
+
+        // --- Step 4: Place Manifold button ---
         document.getElementById("placeManifoldBtn").addEventListener("click", function() {
             currentPoints = []; // cancel any in-progress zone
             mode = "placing_manifold";
@@ -853,7 +1105,7 @@
                 pipePaths = []; pipesGenerated = false;
                 mode = "zones";
                 updateManifoldStatus();
-                document.getElementById("step4panel").classList.add("hidden");
+                document.getElementById("step5panel").classList.add("hidden");
                 document.getElementById("manifoldBox").classList.add("hidden");
                 document.getElementById("clearPipesBtn").classList.add("hidden");
                 redraw(); updateZoneList();
@@ -919,7 +1171,7 @@
                         document.getElementById("manifoldBox").classList.add("hidden");
                         document.getElementById("clearPipesBtn").classList.add("hidden");
                         if (zones.length === 0) {
-                            document.getElementById("step4panel").classList.add("hidden");
+                            document.getElementById("step5panel").classList.add("hidden");
                         }
                         redraw(); updateZoneList();
                     });
