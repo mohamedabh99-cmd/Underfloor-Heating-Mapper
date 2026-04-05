@@ -356,7 +356,7 @@
         }
 
         // =====================================================
-        // GRID-BASED ORTHOGONAL PIPE ROUTING
+        // GRID-BASED ORTHOGONAL PIPE ROUTING (WALL-AWARE)
         // =====================================================
 
         function polygonCentroid(pts) {
@@ -380,7 +380,6 @@
             for (var i = 0; i < n; i++) {
                 var a = pts[i];
                 var b = pts[(i + 1) % n];
-                // Check if the scan line crosses this edge
                 if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) {
                     var t = (y - a.y) / (b.y - a.y);
                     xs.push(a.x + t * (b.x - a.x));
@@ -390,21 +389,205 @@
             return xs;
         }
 
-        // Build orthogonal (H/V only) route from A to B via a horizontal trunk corridor
-        function buildOrthogonalRoute(from, to, trunkY) {
-            var route = [];
-            route.push({ x: from.x, y: from.y });
-            if (Math.abs(from.y - trunkY) > 1) route.push({ x: from.x, y: trunkY });
-            if (Math.abs(from.x - to.x) > 1) route.push({ x: to.x, y: trunkY });
-            if (Math.abs(trunkY - to.y) > 1) route.push({ x: to.x, y: to.y });
-            var clean = [route[0]];
-            for (var i = 1; i < route.length; i++) {
-                if (Math.abs(route[i].x - clean[clean.length-1].x) > 0.5 ||
-                    Math.abs(route[i].y - clean[clean.length-1].y) > 0.5) {
-                    clean.push(route[i]);
+        // --- Wall intersection detection ---
+        function segmentsIntersect(p1, p2, p3, p4) {
+            var d1x = p2.x - p1.x, d1y = p2.y - p1.y;
+            var d2x = p4.x - p3.x, d2y = p4.y - p3.y;
+            var cross = d1x * d2y - d1y * d2x;
+            if (Math.abs(cross) < 1e-10) return false;
+            var t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / cross;
+            var u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / cross;
+            return t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99;
+        }
+
+        function lineHitsWall(a, b) {
+            for (var w = 0; w < walls.length; w++) {
+                var wall = walls[w];
+                for (var s = 0; s < wall.length - 1; s++) {
+                    if (segmentsIntersect(a, b, wall[s], wall[s + 1])) return true;
                 }
             }
-            return clean;
+            return false;
+        }
+
+        // --- Grid-based A* pathfinder (H/V moves only, wall-aware) ---
+        // Builds a coarse grid over the canvas and finds shortest orthogonal path
+        function findOrthogonalPath(from, to, gridStep) {
+            if (!gridStep) gridStep = 12;
+            // If direct H/V route doesn't hit walls, use simple route
+            var simple = buildSimpleRoute(from, to);
+            if (!routeHitsWall(simple)) return simple;
+
+            // Build grid-based A* search
+            var margin = gridStep * 2;
+            var minX = Math.min(from.x, to.x) - margin;
+            var maxX = Math.max(from.x, to.x) + margin;
+            var minY = Math.min(from.y, to.y) - margin;
+            var maxY = Math.max(from.y, to.y) + margin;
+
+            // Clamp to canvas
+            minX = Math.max(0, minX); minY = Math.max(0, minY);
+            maxX = Math.min(canvas.width, maxX); maxY = Math.min(canvas.height, maxY);
+
+            // Snap start/end to grid
+            function snapTo(pt) {
+                return {
+                    x: Math.round((pt.x - minX) / gridStep),
+                    y: Math.round((pt.y - minY) / gridStep)
+                };
+            }
+            function gridToWorld(gx, gy) {
+                return { x: minX + gx * gridStep, y: minY + gy * gridStep };
+            }
+
+            var cols = Math.ceil((maxX - minX) / gridStep) + 1;
+            var rows = Math.ceil((maxY - minY) / gridStep) + 1;
+
+            // Limit grid size to prevent performance issues
+            if (cols * rows > 50000) {
+                gridStep = Math.ceil(gridStep * 1.5);
+                return findOrthogonalPath(from, to, gridStep);
+            }
+
+            var startG = snapTo(from);
+            var endG = snapTo(to);
+            var startKey = startG.x + "," + startG.y;
+            var endKey = endG.x + "," + endG.y;
+
+            // A* with Manhattan distance heuristic
+            var openSet = {};
+            var gScore = {};
+            var fScore = {};
+            var cameFrom = {};
+            var closedSet = {};
+
+            gScore[startKey] = 0;
+            fScore[startKey] = Math.abs(endG.x - startG.x) + Math.abs(endG.y - startG.y);
+            openSet[startKey] = true;
+
+            var dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+
+            var iterations = 0;
+            var maxIter = cols * rows * 2;
+
+            while (Object.keys(openSet).length > 0 && iterations < maxIter) {
+                iterations++;
+                // Find node in openSet with lowest fScore
+                var currentKey = null, bestF = Infinity;
+                for (var key in openSet) {
+                    if (fScore[key] < bestF) { bestF = fScore[key]; currentKey = key; }
+                }
+                if (currentKey === null) break;
+
+                if (currentKey === endKey) {
+                    // Reconstruct path
+                    var path = [];
+                    var ck = endKey;
+                    while (ck) {
+                        var parts = ck.split(",");
+                        var wp = gridToWorld(parseInt(parts[0]), parseInt(parts[1]));
+                        path.unshift(wp);
+                        ck = cameFrom[ck];
+                    }
+                    // Prepend exact start, append exact end
+                    path[0] = { x: from.x, y: from.y };
+                    path[path.length - 1] = { x: to.x, y: to.y };
+                    // Simplify: remove collinear points
+                    return simplifyPath(path);
+                }
+
+                delete openSet[currentKey];
+                closedSet[currentKey] = true;
+
+                var parts = currentKey.split(",");
+                var cx = parseInt(parts[0]), cy = parseInt(parts[1]);
+                var cWorld = gridToWorld(cx, cy);
+
+                for (var d = 0; d < dirs.length; d++) {
+                    var nx = cx + dirs[d].dx, ny = cy + dirs[d].dy;
+                    if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+                    var nKey = nx + "," + ny;
+                    if (closedSet[nKey]) continue;
+
+                    var nWorld = gridToWorld(nx, ny);
+                    // Check if this grid edge crosses a wall
+                    if (lineHitsWall(cWorld, nWorld)) continue;
+
+                    var tentG = (gScore[currentKey] || 0) + 1;
+                    if (tentG < (gScore[nKey] || Infinity)) {
+                        cameFrom[nKey] = currentKey;
+                        gScore[nKey] = tentG;
+                        fScore[nKey] = tentG + Math.abs(endG.x - nx) + Math.abs(endG.y - ny);
+                        openSet[nKey] = true;
+                    }
+                }
+            }
+
+            // Fallback: if no path found, return simple route (shouldn't happen often)
+            return buildSimpleRoute(from, to);
+        }
+
+        // Simple L-shaped orthogonal route (no wall check)
+        function buildSimpleRoute(from, to) {
+            var route = [{ x: from.x, y: from.y }];
+            if (Math.abs(from.x - to.x) > 1 && Math.abs(from.y - to.y) > 1) {
+                route.push({ x: to.x, y: from.y }); // go horizontal first
+            }
+            route.push({ x: to.x, y: to.y });
+            return route;
+        }
+
+        // Check if any segment of a route hits a wall
+        function routeHitsWall(route) {
+            for (var i = 0; i < route.length - 1; i++) {
+                if (lineHitsWall(route[i], route[i + 1])) return true;
+            }
+            return false;
+        }
+
+        // Remove collinear intermediate points from an orthogonal path
+        function simplifyPath(path) {
+            if (path.length <= 2) return path;
+            var result = [path[0]];
+            for (var i = 1; i < path.length - 1; i++) {
+                var prev = result[result.length - 1];
+                var next = path[i + 1];
+                // Keep point only if direction changes
+                var sameX = Math.abs(prev.x - path[i].x) < 0.5 && Math.abs(path[i].x - next.x) < 0.5;
+                var sameY = Math.abs(prev.y - path[i].y) < 0.5 && Math.abs(path[i].y - next.y) < 0.5;
+                if (!sameX && !sameY) {
+                    result.push(path[i]);
+                } else if (!sameX && !sameY) {
+                    result.push(path[i]);
+                }
+            }
+            result.push(path[path.length - 1]);
+            return result;
+        }
+
+        // Build wall-aware orthogonal route via trunk corridor
+        function buildOrthogonalRoute(from, to, trunkY) {
+            // Try direct route through trunk corridor first
+            var viaTrunk = [];
+            viaTrunk.push({ x: from.x, y: from.y });
+            if (Math.abs(from.y - trunkY) > 1) viaTrunk.push({ x: from.x, y: trunkY });
+            if (Math.abs(from.x - to.x) > 1) viaTrunk.push({ x: to.x, y: trunkY });
+            if (Math.abs(trunkY - to.y) > 1) viaTrunk.push({ x: to.x, y: to.y });
+
+            // Remove duplicate consecutive points
+            var clean = [viaTrunk[0]];
+            for (var i = 1; i < viaTrunk.length; i++) {
+                if (Math.abs(viaTrunk[i].x - clean[clean.length-1].x) > 0.5 ||
+                    Math.abs(viaTrunk[i].y - clean[clean.length-1].y) > 0.5) {
+                    clean.push(viaTrunk[i]);
+                }
+            }
+
+            // If no walls or trunk route is clear, use it
+            if (walls.length === 0 || !routeHitsWall(clean)) return clean;
+
+            // Otherwise use A* grid pathfinder
+            return findOrthogonalPath(from, to, 10);
         }
 
         // Offset a polyline perpendicular for parallel supply/return pipes
@@ -429,7 +612,8 @@
             return result;
         }
 
-        // Generate serpentine fill within a zone polygon
+        // Generate serpentine fill within a zone polygon (wall-aware)
+        // Horizontal runs that cross a wall are split at the wall boundary
         function generateSerpentineInZone(pts, spacingPx) {
             var minY = Infinity, maxY = -Infinity;
             for (var i = 0; i < pts.length; i++) {
@@ -455,8 +639,42 @@
                 var seg = segments[s];
                 var sx = goingRight ? seg.left : seg.right;
                 var ex = goingRight ? seg.right : seg.left;
-                serpentine.push({ x: sx, y: seg.y });
-                serpentine.push({ x: ex, y: seg.y });
+                var p1 = { x: sx, y: seg.y };
+                var p2 = { x: ex, y: seg.y };
+
+                // Check if this horizontal run crosses a wall
+                if (walls.length > 0 && lineHitsWall(p1, p2)) {
+                    // Skip this run but connect via wall-aware path
+                    if (serpentine.length > 0) {
+                        var prev = serpentine[serpentine.length - 1];
+                        var detour = findOrthogonalPath(prev, p2, 8);
+                        // Append detour (skip first point = prev)
+                        for (var dp = 1; dp < detour.length; dp++) {
+                            serpentine.push(detour[dp]);
+                        }
+                    } else {
+                        serpentine.push(p1);
+                        serpentine.push(p2);
+                    }
+                } else {
+                    // No wall collision — add normally
+                    if (serpentine.length > 0) {
+                        var prev2 = serpentine[serpentine.length - 1];
+                        // The vertical connector between rows might also hit a wall
+                        if (walls.length > 0 && lineHitsWall(prev2, p1)) {
+                            var connector = findOrthogonalPath(prev2, p1, 8);
+                            for (var cp = 1; cp < connector.length; cp++) {
+                                serpentine.push(connector[cp]);
+                            }
+                        } else {
+                            serpentine.push(p1);
+                        }
+                        serpentine.push(p2);
+                    } else {
+                        serpentine.push(p1);
+                        serpentine.push(p2);
+                    }
+                }
                 goingRight = !goingRight;
             }
             return serpentine;
