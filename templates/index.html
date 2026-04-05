@@ -37,9 +37,7 @@
             font-size: 14px;
             margin-right: 8px;
         }
-        .step-number.done {
-            background: #27ae60;
-        }
+        .step-number.done { background: #27ae60; }
 
         button {
             background: #3498db;
@@ -50,6 +48,7 @@
             cursor: pointer;
             font-size: 14px;
             margin-right: 8px;
+            margin-bottom: 6px;
         }
         button:hover { background: #2980b9; }
         button.danger { background: #e74c3c; }
@@ -58,7 +57,6 @@
         button.secondary:hover { background: #7f8c8d; }
         button.success { background: #27ae60; }
         button.success:hover { background: #219a52; }
-
         button:disabled { background: #bdc3c7; cursor: not-allowed; }
 
         input[type="file"] { margin: 10px 0; }
@@ -72,10 +70,7 @@
             -webkit-touch-callout: none;
             touch-action: none;
         }
-        .canvas-container img {
-            display: block;
-            max-width: 100%;
-        }
+        .canvas-container img { display: block; max-width: 100%; }
         .canvas-container canvas {
             position: absolute;
             top: 0;
@@ -91,76 +86,55 @@
         }
         .zone-item:last-child { border-bottom: none; }
         .zone-color-dot {
-            width: 16px;
-            height: 16px;
+            width: 16px; height: 16px;
             border-radius: 50%;
             margin-right: 10px;
             flex-shrink: 0;
         }
         .zone-item span { flex-grow: 1; }
-        .zone-item button {
-            padding: 4px 12px;
-            font-size: 12px;
-            margin: 0;
-        }
+        .zone-item button { padding: 4px 12px; font-size: 12px; margin: 0; }
 
-        .help-text {
-            color: #777;
-            font-size: 14px;
-            margin: 8px 0;
-        }
+        .help-text { color: #777; font-size: 14px; margin: 8px 0; }
 
         .area-input-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 12px 0;
-            flex-wrap: wrap;
+            display: flex; align-items: center; gap: 10px;
+            margin: 12px 0; flex-wrap: wrap;
         }
         .area-input-row input[type="number"] {
-            width: 100px;
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 16px;
+            width: 100px; padding: 8px 12px;
+            border: 1px solid #ccc; border-radius: 4px; font-size: 16px;
         }
         .area-input-row select {
             padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 16px;
+            border: 1px solid #ccc; border-radius: 4px; font-size: 16px;
         }
 
         .boundary-info {
-            background: #eaf7ee;
-            border: 1px solid #27ae60;
-            border-radius: 6px;
-            padding: 12px 18px;
-            margin: 12px 0;
-            color: #1e7e34;
+            background: #eaf7ee; border: 1px solid #27ae60;
+            border-radius: 6px; padding: 12px 18px; margin: 12px 0; color: #1e7e34;
         }
 
-        .summary-table {
-            width: 100%;
-            border-collapse: collapse;
+        .manifold-table {
+            width: 100%; border-collapse: collapse;
         }
-        .summary-table th, .summary-table td {
-            text-align: left;
-            padding: 8px 12px;
-            border-bottom: 1px solid #eee;
+        .manifold-table th, .manifold-table td {
+            text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee;
         }
-        .summary-table th { color: #555; font-size: 13px; text-transform: uppercase; }
+        .manifold-table th { color: #555; font-size: 13px; text-transform: uppercase; }
         .total-row td { font-weight: bold; border-top: 2px solid #333; border-bottom: none; }
 
         .area-badge {
-            background: #eef6fb;
-            color: #2980b9;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            margin-left: 8px;
+            background: #eef6fb; color: #2980b9;
+            padding: 2px 8px; border-radius: 4px;
+            font-size: 13px; font-weight: bold; margin-left: 8px;
         }
+
+        .spec-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 8px 20px; margin-bottom: 16px;
+        }
+        .spec-grid dt { font-weight: bold; color: #555; }
+        .spec-grid dd { margin: 0; font-size: 16px; }
 
         .hidden { display: none !important; }
     </style>
@@ -184,7 +158,7 @@
     <div class="panel" id="step2panel">
         <h2><span class="step-number" id="step2num">2</span> Draw Property Boundary</h2>
         <p class="help-text">
-            <strong>Tap/click</strong> around the outline of your entire property on the floor plan.
+            <strong>Tap/click</strong> around the outline of your entire property.
             <strong>Double-tap/double-click</strong> to close the shape.
         </p>
         <button id="undoBoundaryBtn" class="secondary">Undo Last Point</button>
@@ -205,16 +179,26 @@
         </div>
     </div>
 
-    <!-- STEP 3: Draw heating zones (hidden until boundary is set) -->
+    <!-- STEP 3: Draw heating zones -->
     <div class="panel hidden" id="step3panel">
         <h2><span class="step-number">3</span> Draw Heating Zones</h2>
         <p class="help-text">
-            Now draw individual heating zones inside the property boundary.
+            Draw individual heating zones inside the property boundary.
             <strong>Tap/click</strong> to place points, <strong>double-tap/double-click</strong> to close each zone.
         </p>
         <button id="undoBtn" class="secondary">Undo Last Point</button>
         <button id="cancelBtn" class="secondary">Cancel Current Zone</button>
         <button id="clearBtn" class="danger">Clear All Zones</button>
+    </div>
+
+    <!-- STEP 4: Generate pipes -->
+    <div class="panel hidden" id="step4panel">
+        <h2><span class="step-number">4</span> Generate Pipe Layout</h2>
+        <p class="help-text">
+            Generate serpentine pipe loops for all heating zones. Pipes are spaced 15 cm apart (center-to-center).
+        </p>
+        <button id="generateBtn" class="success">Generate Pipe Loops</button>
+        <button id="clearPipesBtn" class="danger hidden">Clear Pipes</button>
     </div>
 
     <!-- Floor plan with canvas overlay -->
@@ -229,23 +213,32 @@
         <div id="zoneItems"></div>
     </div>
 
-    <!-- Coverage summary -->
-    <div class="panel hidden" id="summaryBox">
-        <h2>Coverage Summary</h2>
-        <table class="summary-table">
+    <!-- Manifold table -->
+    <div class="panel hidden" id="manifoldBox">
+        <h2>Manifold Schedule</h2>
+        <dl class="spec-grid" id="specGrid"></dl>
+        <table class="manifold-table">
             <thead>
-                <tr><th>Zone</th><th>Area</th><th>% of Property</th></tr>
+                <tr>
+                    <th>Group</th>
+                    <th>Zone</th>
+                    <th>Floor Area</th>
+                    <th>Pipe Length</th>
+                    <th>C.T.C.</th>
+                    <th>Pipe &empty;</th>
+                </tr>
             </thead>
-            <tbody id="summaryBody"></tbody>
+            <tbody id="manifoldBody"></tbody>
         </table>
     </div>
 
     <script>
     (function() {
+        // --- Constants ---
+        var PIPE_CTC_M = 0.15;       // 15 cm center-to-center
+        var PIPE_DIAMETER_CM = 1.6;   // pipe diameter
+
         // --- State machine ---
-        // "boundary" = drawing the property outline (step 2)
-        // "scale"    = boundary drawn, waiting for user to enter area (step 2b)
-        // "zones"    = scale set, now drawing heating zones (step 3)
         var mode = "boundary";
 
         // --- Setup ---
@@ -253,7 +246,6 @@
         var canvas = document.getElementById("drawCanvas");
         var ctx = canvas.getContext("2d");
 
-        // Zone colors (semi-transparent fills)
         var ZONE_COLORS = [
             "rgba(231, 76, 60, 0.3)",
             "rgba(46, 204, 113, 0.3)",
@@ -274,23 +266,29 @@
             "rgba(26, 188, 156, 0.9)",
             "rgba(236, 100, 164, 0.9)"
         ];
-        // Boundary styling
+        var PIPE_COLORS = [
+            "#c0392b", "#1e8449", "#2471a3",
+            "#b7950b", "#7d3c98", "#ca6f1e",
+            "#148f77", "#cb4f85"
+        ];
         var BOUNDARY_COLOR = "rgba(44, 62, 80, 0.15)";
         var BOUNDARY_BORDER = "rgba(44, 62, 80, 0.9)";
 
-        var boundaryPoints = [];  // Property boundary polygon
-        var boundaryArea = null;  // pixel area of boundary
-        var realAreaValue = 0;    // user-entered real area
-        var unit = "m";           // "m" or "ft"
-        var scale = 0;            // real-area per pixel-area
+        var boundaryPoints = [];
+        var boundaryArea = null;
+        var realAreaValue = 0;
+        var unit = "m";
+        var scale = 0;          // real sq-units per pixel sq-unit
+        var linearScale = 0;    // real units per pixel
 
         var zones = [];
         var currentPoints = [];
+        var pipePaths = [];     // array of {path: [{x,y},...], lengthPx: number} per zone
+        var pipesGenerated = false;
 
         // --- Shoelace formula ---
         function polygonAreaPixels(pts) {
-            var area = 0;
-            var n = pts.length;
+            var area = 0, n = pts.length;
             for (var i = 0; i < n; i++) {
                 var j = (i + 1) % n;
                 area += pts[i].x * pts[j].y;
@@ -299,57 +297,160 @@
             return Math.abs(area) / 2;
         }
 
-        // Convert pixel area to real-world area using boundary-derived scale
         function pixelsToRealArea(pixelArea) {
-            if (scale === 0) return 0;
-            return pixelArea * scale;
+            return scale === 0 ? 0 : pixelArea * scale;
         }
 
-        function getUnitLabel() {
-            return unit === "ft" ? "ft" : "m";
+        function pixelsToRealLength(px) {
+            return linearScale === 0 ? 0 : px * linearScale;
         }
+
+        function getUnitLabel() { return unit === "ft" ? "ft" : "m"; }
 
         // --- Canvas resize ---
         function resizeCanvas() {
             canvas.width = img.clientWidth;
             canvas.height = img.clientHeight;
+            if (pipesGenerated) regeneratePipes();
             redraw();
         }
         img.onload = resizeCanvas;
         window.addEventListener("resize", resizeCanvas);
         if (img.complete) resizeCanvas();
 
-        // --- Coordinate helper ---
         function getPos(e) {
             var rect = canvas.getBoundingClientRect();
-            var clientX, clientY;
+            var cx, cy;
             if (e.touches && e.touches.length > 0) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
+                cx = e.touches[0].clientX; cy = e.touches[0].clientY;
             } else {
-                clientX = e.clientX;
-                clientY = e.clientY;
+                cx = e.clientX; cy = e.clientY;
             }
-            return { x: clientX - rect.left, y: clientY - rect.top };
+            return { x: cx - rect.left, y: cy - rect.top };
         }
 
-        // --- Drawing ---
+        // =====================================================
+        // SERPENTINE PIPE GENERATION
+        // =====================================================
+
+        // Find all x-coordinates where a horizontal line at y intersects the polygon
+        function scanLineIntersections(pts, y) {
+            var xs = [];
+            var n = pts.length;
+            for (var i = 0; i < n; i++) {
+                var a = pts[i];
+                var b = pts[(i + 1) % n];
+                // Check if the scan line crosses this edge
+                if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) {
+                    var t = (y - a.y) / (b.y - a.y);
+                    xs.push(a.x + t * (b.x - a.x));
+                }
+            }
+            xs.sort(function(a, b) { return a - b; });
+            return xs;
+        }
+
+        // Generate a serpentine pipe path within a polygon
+        function generateSerpentine(pts, spacingPx) {
+            // Find bounding box
+            var minY = Infinity, maxY = -Infinity;
+            for (var i = 0; i < pts.length; i++) {
+                if (pts[i].y < minY) minY = pts[i].y;
+                if (pts[i].y > maxY) maxY = pts[i].y;
+            }
+
+            // Inset slightly so pipes don't sit exactly on the boundary
+            var inset = spacingPx * 0.5;
+            var startY = minY + inset;
+            var endY = maxY - inset;
+
+            // Collect scan line segments
+            var segments = [];
+            for (var y = startY; y <= endY; y += spacingPx) {
+                var xs = scanLineIntersections(pts, y);
+                // Pair up intersections (entry/exit)
+                // We take the outermost pair for simplicity (first and last)
+                if (xs.length >= 2) {
+                    // Inset the x values slightly
+                    var lx = xs[0] + inset;
+                    var rx = xs[xs.length - 1] - inset;
+                    if (lx < rx) {
+                        segments.push({ y: y, left: lx, right: rx });
+                    }
+                }
+            }
+
+            if (segments.length === 0) return { path: [], lengthPx: 0 };
+
+            // Build serpentine path
+            var path = [];
+            var totalLen = 0;
+            var goingRight = true;
+
+            for (var s = 0; s < segments.length; s++) {
+                var seg = segments[s];
+                var startX = goingRight ? seg.left : seg.right;
+                var endX = goingRight ? seg.right : seg.left;
+
+                var p1 = { x: startX, y: seg.y };
+                var p2 = { x: endX, y: seg.y };
+
+                // Add connector from previous point
+                if (path.length > 0) {
+                    var prev = path[path.length - 1];
+                    totalLen += Math.sqrt(
+                        Math.pow(p1.x - prev.x, 2) + Math.pow(p1.y - prev.y, 2)
+                    );
+                }
+
+                path.push(p1);
+                path.push(p2);
+                totalLen += Math.abs(endX - startX);
+
+                goingRight = !goingRight;
+            }
+
+            return { path: path, lengthPx: totalLen };
+        }
+
+        function regeneratePipes() {
+            if (scale === 0 || zones.length === 0) return;
+            var spacingPx = PIPE_CTC_M / linearScale;
+            pipePaths = [];
+            for (var i = 0; i < zones.length; i++) {
+                pipePaths.push(generateSerpentine(zones[i].points, spacingPx));
+            }
+        }
+
+        // =====================================================
+        // DRAWING
+        // =====================================================
+
         function redraw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw boundary if it exists
+            // Boundary
             if (boundaryPoints.length >= 3 && mode !== "boundary") {
                 drawPolygon(boundaryPoints, BOUNDARY_COLOR, BOUNDARY_BORDER, null);
             }
 
-            // Draw completed zones
+            // Completed zones
             for (var i = 0; i < zones.length; i++) {
                 drawPolygon(zones[i].points, zones[i].color, zones[i].border, zones[i]);
             }
 
-            // Draw in-progress shape
+            // Pipe paths
+            if (pipesGenerated) {
+                for (var p = 0; p < pipePaths.length; p++) {
+                    drawPipePath(pipePaths[p].path, PIPE_COLORS[p % PIPE_COLORS.length]);
+                }
+            }
+
+            // In-progress drawing
             if (currentPoints.length > 0) {
-                var border = mode === "boundary" ? BOUNDARY_BORDER : ZONE_BORDERS[zones.length % ZONE_BORDERS.length];
+                var border = mode === "boundary"
+                    ? BOUNDARY_BORDER
+                    : ZONE_BORDERS[zones.length % ZONE_BORDERS.length];
 
                 ctx.beginPath();
                 ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
@@ -376,9 +477,7 @@
 
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
-            for (var i = 1; i < pts.length; i++) {
-                ctx.lineTo(pts[i].x, pts[i].y);
-            }
+            for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
             ctx.closePath();
             ctx.fillStyle = fillColor;
             ctx.fill();
@@ -386,15 +485,10 @@
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Label (only for zones, not boundary)
             if (zone && scale > 0) {
                 var cx = 0, cy = 0;
-                for (var j = 0; j < pts.length; j++) {
-                    cx += pts[j].x;
-                    cy += pts[j].y;
-                }
-                cx /= pts.length;
-                cy /= pts.length;
+                for (var j = 0; j < pts.length; j++) { cx += pts[j].x; cy += pts[j].y; }
+                cx /= pts.length; cy /= pts.length;
 
                 var area = pixelsToRealArea(polygonAreaPixels(pts));
                 var u = getUnitLabel();
@@ -409,7 +503,25 @@
             }
         }
 
-        // --- Finishing shapes ---
+        function drawPipePath(path, color) {
+            if (path.length < 2) return;
+
+            ctx.beginPath();
+            ctx.moveTo(path[0].x, path[0].y);
+            for (var i = 1; i < path.length; i++) {
+                ctx.lineTo(path[i].x, path[i].y);
+            }
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.8;
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        }
+
+        // =====================================================
+        // SHAPE FINISHING
+        // =====================================================
+
         function finishCurrentShape() {
             if (currentPoints.length < 3) {
                 alert("You need at least 3 points. Keep clicking to add more.");
@@ -422,7 +534,6 @@
                 currentPoints = [];
                 mode = "scale";
 
-                // Update UI: show area input, hide drawing buttons
                 document.getElementById("boundaryInfo").textContent =
                     "Boundary drawn with " + boundaryPoints.length + " points.";
                 document.getElementById("boundaryDoneSection").classList.remove("hidden");
@@ -430,7 +541,6 @@
                 document.getElementById("cancelBoundaryBtn").classList.add("hidden");
                 document.getElementById("resetBoundaryBtn").classList.remove("hidden");
                 document.getElementById("step2num").classList.add("done");
-
                 redraw();
 
             } else if (mode === "zones") {
@@ -445,18 +555,28 @@
                     border: ZONE_BORDERS[colorIdx],
                     name: name
                 });
-
                 currentPoints = [];
+
+                // Clear old pipes when zones change
+                pipesGenerated = false;
+                pipePaths = [];
+                document.getElementById("clearPipesBtn").classList.add("hidden");
+                document.getElementById("generateBtn").disabled = false;
+                document.getElementById("manifoldBox").classList.add("hidden");
+
                 redraw();
                 updateZoneList();
+                document.getElementById("step4panel").classList.remove("hidden");
             }
         }
 
-        // --- Event handlers ---
+        // =====================================================
+        // EVENT HANDLERS
+        // =====================================================
+
         canvas.addEventListener("click", function(e) {
-            if (mode === "scale") return; // no drawing while entering area
-            var pos = getPos(e);
-            currentPoints.push(pos);
+            if (mode === "scale") return;
+            currentPoints.push(getPos(e));
             redraw();
         });
 
@@ -467,7 +587,6 @@
             finishCurrentShape();
         });
 
-        // iPad touch support
         var lastTapTime = 0;
         canvas.addEventListener("touchend", function(e) {
             e.preventDefault();
@@ -479,8 +598,7 @@
                 lastTapTime = 0;
             } else {
                 var touch = e.changedTouches[0];
-                var pos = getPos({ clientX: touch.clientX, clientY: touch.clientY });
-                currentPoints.push(pos);
+                currentPoints.push(getPos({ clientX: touch.clientX, clientY: touch.clientY }));
                 redraw();
                 lastTapTime = now;
             }
@@ -491,19 +609,13 @@
         document.getElementById("undoBoundaryBtn").addEventListener("click", function() {
             if (currentPoints.length > 0) { currentPoints.pop(); redraw(); }
         });
-
         document.getElementById("cancelBoundaryBtn").addEventListener("click", function() {
-            currentPoints = [];
-            redraw();
+            currentPoints = []; redraw();
         });
-
         document.getElementById("resetBoundaryBtn").addEventListener("click", function() {
-            // Go back to drawing boundary
-            boundaryPoints = [];
-            boundaryArea = null;
-            currentPoints = [];
-            scale = 0;
-            zones = [];
+            boundaryPoints = []; boundaryArea = null; currentPoints = [];
+            scale = 0; linearScale = 0; zones = [];
+            pipePaths = []; pipesGenerated = false;
             mode = "boundary";
 
             document.getElementById("boundaryDoneSection").classList.add("hidden");
@@ -512,9 +624,9 @@
             document.getElementById("resetBoundaryBtn").classList.add("hidden");
             document.getElementById("step2num").classList.remove("done");
             document.getElementById("step3panel").classList.add("hidden");
+            document.getElementById("step4panel").classList.add("hidden");
             document.getElementById("zoneList").classList.add("hidden");
-            document.getElementById("summaryBox").classList.add("hidden");
-
+            document.getElementById("manifoldBox").classList.add("hidden");
             redraw();
         });
 
@@ -529,22 +641,16 @@
             }
 
             realAreaValue = areaVal;
-            // scale = how many real-world square-units per pixel-square-unit
             scale = realAreaValue / boundaryArea;
+            linearScale = Math.sqrt(scale);
             mode = "zones";
 
-            // Update boundary info
             document.getElementById("boundaryInfo").textContent =
                 "Property boundary set: " + realAreaValue + " " + getUnitLabel() + "\u00B2. Scale locked.";
-
-            // Show step 3
             document.getElementById("step3panel").classList.remove("hidden");
-
-            // Disable editing of area inputs
             document.getElementById("realArea").disabled = true;
             document.getElementById("areaUnit").disabled = true;
             document.getElementById("confirmScaleBtn").disabled = true;
-
             redraw();
         });
 
@@ -552,30 +658,48 @@
         document.getElementById("undoBtn").addEventListener("click", function() {
             if (currentPoints.length > 0) { currentPoints.pop(); redraw(); }
         });
-
         document.getElementById("cancelBtn").addEventListener("click", function() {
-            currentPoints = [];
-            redraw();
+            currentPoints = []; redraw();
         });
-
         document.getElementById("clearBtn").addEventListener("click", function() {
             if (zones.length === 0 && currentPoints.length === 0) return;
             if (confirm("Remove all heating zones?")) {
-                zones = [];
-                currentPoints = [];
-                redraw();
-                updateZoneList();
+                zones = []; currentPoints = [];
+                pipePaths = []; pipesGenerated = false;
+                document.getElementById("step4panel").classList.add("hidden");
+                document.getElementById("manifoldBox").classList.add("hidden");
+                document.getElementById("clearPipesBtn").classList.add("hidden");
+                redraw(); updateZoneList();
             }
         });
 
-        // --- Zone list ---
+        // --- Step 4: Generate pipes ---
+        document.getElementById("generateBtn").addEventListener("click", function() {
+            regeneratePipes();
+            pipesGenerated = true;
+            redraw();
+            updateManifoldTable();
+            document.getElementById("clearPipesBtn").classList.remove("hidden");
+        });
+
+        document.getElementById("clearPipesBtn").addEventListener("click", function() {
+            pipePaths = []; pipesGenerated = false;
+            document.getElementById("manifoldBox").classList.add("hidden");
+            document.getElementById("clearPipesBtn").classList.add("hidden");
+            document.getElementById("generateBtn").disabled = false;
+            redraw();
+        });
+
+        // =====================================================
+        // ZONE LIST
+        // =====================================================
+
         function updateZoneList() {
             var listDiv = document.getElementById("zoneList");
             var itemsDiv = document.getElementById("zoneItems");
 
             if (zones.length === 0) {
                 listDiv.classList.add("hidden");
-                document.getElementById("summaryBox").classList.add("hidden");
                 return;
             }
 
@@ -596,15 +720,21 @@
                     var u = getUnitLabel();
 
                     var nameSpan = document.createElement("span");
-                    nameSpan.innerHTML = zone.name + " <span class='area-badge'>" + area.toFixed(1) + " " + u + "\u00B2</span>";
+                    nameSpan.innerHTML = zone.name +
+                        " <span class='area-badge'>" + area.toFixed(1) + " " + u + "\u00B2</span>";
 
                     var delBtn = document.createElement("button");
                     delBtn.className = "danger";
                     delBtn.textContent = "Delete";
                     delBtn.addEventListener("click", function() {
                         zones.splice(idx, 1);
-                        redraw();
-                        updateZoneList();
+                        pipePaths = []; pipesGenerated = false;
+                        document.getElementById("manifoldBox").classList.add("hidden");
+                        document.getElementById("clearPipesBtn").classList.add("hidden");
+                        if (zones.length === 0) {
+                            document.getElementById("step4panel").classList.add("hidden");
+                        }
+                        redraw(); updateZoneList();
                     });
 
                     item.appendChild(dot);
@@ -613,48 +743,68 @@
                     itemsDiv.appendChild(item);
                 })(i);
             }
-
-            updateSummary();
         }
 
-        // --- Coverage summary ---
-        function updateSummary() {
-            var summaryBox = document.getElementById("summaryBox");
-            var summaryBody = document.getElementById("summaryBody");
+        // =====================================================
+        // MANIFOLD TABLE
+        // =====================================================
 
-            if (zones.length === 0) {
-                summaryBox.classList.add("hidden");
+        function updateManifoldTable() {
+            var manifoldBox = document.getElementById("manifoldBox");
+            var specGrid = document.getElementById("specGrid");
+            var manifoldBody = document.getElementById("manifoldBody");
+
+            if (!pipesGenerated || zones.length === 0) {
+                manifoldBox.classList.add("hidden");
                 return;
             }
 
-            summaryBox.classList.remove("hidden");
-            summaryBody.innerHTML = "";
+            manifoldBox.classList.remove("hidden");
+            manifoldBody.innerHTML = "";
 
             var u = getUnitLabel();
-            var totalZoneArea = 0;
+            var totalFloorArea = 0;
+            var totalPipeLength = 0;
 
+            // Per-zone rows
             for (var i = 0; i < zones.length; i++) {
                 var area = pixelsToRealArea(polygonAreaPixels(zones[i].points));
-                totalZoneArea += area;
-                // Percentage is now relative to the property boundary, not the image
-                var pct = (area / realAreaValue * 100).toFixed(1);
+                var pipeLen = pixelsToRealLength(pipePaths[i] ? pipePaths[i].lengthPx : 0);
+                totalFloorArea += area;
+                totalPipeLength += pipeLen;
 
                 var row = document.createElement("tr");
                 row.innerHTML =
+                    "<td>" + (i + 1) + "</td>" +
                     "<td>" + zones[i].name + "</td>" +
                     "<td>" + area.toFixed(1) + " " + u + "\u00B2</td>" +
-                    "<td>" + pct + "%</td>";
-                summaryBody.appendChild(row);
+                    "<td>" + pipeLen.toFixed(1) + " " + u + "</td>" +
+                    "<td>15 cm</td>" +
+                    "<td>1.6 cm</td>";
+                manifoldBody.appendChild(row);
             }
 
-            var totalPct = (totalZoneArea / realAreaValue * 100).toFixed(1);
+            // Total row
             var totalRow = document.createElement("tr");
             totalRow.className = "total-row";
             totalRow.innerHTML =
-                "<td>Total Coverage</td>" +
-                "<td>" + totalZoneArea.toFixed(1) + " " + u + "\u00B2</td>" +
-                "<td>" + totalPct + "% of " + realAreaValue + " " + u + "\u00B2</td>";
-            summaryBody.appendChild(totalRow);
+                "<td colspan='2'>Total</td>" +
+                "<td>" + totalFloorArea.toFixed(1) + " " + u + "\u00B2</td>" +
+                "<td>" + totalPipeLength.toFixed(1) + " " + u + "</td>" +
+                "<td colspan='2'></td>";
+            manifoldBody.appendChild(totalRow);
+
+            // Manifold size = number of zones (loops)
+            var manifoldSize = zones.length;
+
+            // Spec summary
+            specGrid.innerHTML =
+                "<dt>Total Floor Area</dt><dd>" + totalFloorArea.toFixed(1) + " " + u + "\u00B2</dd>" +
+                "<dt>Manifold Size</dt><dd>" + manifoldSize + "-port</dd>" +
+                "<dt>Total Pipe Length</dt><dd>" + totalPipeLength.toFixed(1) + " " + u + "</dd>" +
+                "<dt>Pipe Diameter</dt><dd>1.6 cm (16 mm)</dd>" +
+                "<dt>Pipe Spacing (C.T.C.)</dt><dd>15 cm</dd>" +
+                "<dt>Number of Loops</dt><dd>" + manifoldSize + "</dd>";
         }
     })();
     </script>
