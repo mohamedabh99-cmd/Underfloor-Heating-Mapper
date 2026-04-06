@@ -58,6 +58,8 @@
         button.success { background: #27ae60; }
         button.success:hover { background: #219a52; }
         button:disabled { background: #bdc3c7; cursor: not-allowed; }
+        button.active-toggle { background: #e74c3c; }
+        button.active-toggle:hover { background: #c0392b; }
 
         input[type="file"] { margin: 10px 0; }
 
@@ -136,6 +138,12 @@
         .spec-grid dt { font-weight: bold; color: #555; }
         .spec-grid dd { margin: 0; font-size: 16px; }
 
+        .route-info {
+            background: #fef9e7; border: 1px solid #f1c40f;
+            border-radius: 6px; padding: 10px 14px; margin: 10px 0;
+            font-size: 13px; color: #7d6608;
+        }
+
         .hidden { display: none !important; }
     </style>
 </head>
@@ -179,23 +187,9 @@
         </div>
     </div>
 
-    <!-- STEP 3: Draw walls -->
+    <!-- STEP 3: Place manifolds & draw heating zones -->
     <div class="panel hidden" id="step3panel">
-        <h2><span class="step-number" id="step3num">3</span> Draw Walls</h2>
-        <p class="help-text">
-            Draw interior walls and obstacles. <strong>Click</strong> to place wall points,
-            <strong>double-click</strong> to finish each wall line. Pipes will route around these walls.
-        </p>
-        <button id="undoWallBtn" class="secondary">Undo Last Point</button>
-        <button id="cancelWallBtn" class="secondary">Cancel Current Wall</button>
-        <button id="clearWallsBtn" class="danger">Clear All Walls</button>
-        <button id="doneWallsBtn" class="success">Done &mdash; Continue to Zones</button>
-        <p class="help-text" id="wallCount"></p>
-    </div>
-
-    <!-- STEP 4: Place manifolds & draw heating zones -->
-    <div class="panel hidden" id="step4panel">
-        <h2><span class="step-number">4</span> Place Manifolds &amp; Draw Heating Zones</h2>
+        <h2><span class="step-number" id="step3num">3</span> Place Manifolds &amp; Draw Heating Zones</h2>
         <p class="help-text">
             First, place one or more manifolds. Then draw zones &mdash; each zone connects to the most recently placed manifold.
         </p>
@@ -205,16 +199,33 @@
         <button id="undoBtn" class="secondary">Undo Last Point</button>
         <button id="cancelBtn" class="secondary">Cancel Current Zone</button>
         <button id="clearBtn" class="danger">Clear All Zones</button>
+        <button id="doneZonesBtn" class="success hidden">Done &mdash; Draw Pipe Routes</button>
     </div>
 
-    <!-- STEP 5: Generate pipes -->
-    <div class="panel hidden" id="step5panel">
-        <h2><span class="step-number">5</span> Generate Pipe Layout</h2>
+    <!-- STEP 4: Draw pipe routes -->
+    <div class="panel hidden" id="step4panel">
+        <h2><span class="step-number" id="step4num">4</span> Draw Pipe Routes</h2>
         <p class="help-text">
-            Generate serpentine pipe loops for all heating zones. Pipes are spaced 15 cm apart (center-to-center).
+            Draw supply and return pipes manually from your manifold to each zone.
+            <strong>Click</strong> to place pipe points, <strong>double-click</strong> to finish each pipe line.
         </p>
-        <button id="generateBtn" class="success">Generate Pipe Loops</button>
-        <button id="clearPipesBtn" class="danger hidden">Clear Pipes</button>
+        <button id="drawSupplyBtn" class="active-toggle">Draw Supply (Red)</button>
+        <button id="drawReturnBtn">Draw Return (Blue)</button>
+        <button id="undoRouteBtn" class="secondary">Undo Last Point</button>
+        <button id="cancelRouteBtn" class="secondary">Cancel Current Pipe</button>
+        <button id="clearRoutesBtn" class="danger">Clear All Routes</button>
+        <button id="doneRoutesBtn" class="success">Done &mdash; Generate Serpentine</button>
+        <div class="route-info" id="routeInfo">No pipe routes drawn yet. Select Supply or Return and start clicking on the floor plan.</div>
+    </div>
+
+    <!-- STEP 5: Generate serpentine -->
+    <div class="panel hidden" id="step5panel">
+        <h2><span class="step-number">5</span> Generate Serpentine Fill</h2>
+        <p class="help-text">
+            Auto-fill each zone with serpentine heating pipes (15 cm spacing) and calculate total pipe lengths.
+        </p>
+        <button id="generateBtn" class="success">Generate Serpentine Fill</button>
+        <button id="clearPipesBtn" class="danger hidden">Clear Serpentine</button>
     </div>
 
     <!-- Floor plan with canvas overlay -->
@@ -252,11 +263,13 @@
     <script>
     (function() {
         // --- Constants ---
-        var PIPE_CTC_M = 0.15;       // 15 cm center-to-center
-        var PIPE_DIAMETER_CM = 1.6;   // pipe diameter
+        var PIPE_CTC_M = 0.15;
+        var PIPE_DIAMETER_CM = 1.6;
+        var SUPPLY_COLOR = "#c0392b";
+        var RETURN_COLOR = "#2471a3";
 
         // --- State machine ---
-        // "boundary" | "scale" | "walls" | "zones" | "placing_manifold"
+        // "boundary" | "scale" | "zones" | "placing_manifold" | "drawing_supply" | "drawing_return" | "done_routes"
         var mode = "boundary";
 
         // --- Setup ---
@@ -296,20 +309,22 @@
         var boundaryArea = null;
         var realAreaValue = 0;
         var unit = "m";
-        var scale = 0;          // real sq-units per pixel sq-unit
-        var linearScale = 0;    // real units per pixel
+        var scale = 0;
+        var linearScale = 0;
 
-        var walls = [];             // array of polylines: [{x,y}, ...]
-        var wallPoints = [];        // current wall being drawn
-        var WALL_COLOR = "#2c3e50"; // dark color for walls
-        var WALL_WIDTH = 3;
-
-        var manifolds = [];         // [{id, x, y, name}]
-        var activeManifoldId = null; // which manifold new zones connect to
+        var manifolds = [];
+        var activeManifoldId = null;
         var zones = [];
         var currentPoints = [];
-        var mousePos = null;    // current cursor position for line preview
-        var pipePaths = [];     // array of {supply, ret, serpentine, totalLenPx} per zone
+        var mousePos = null;
+
+        // Pipe routes drawn by user
+        var supplyRoutes = [];      // array of polylines [{x,y}, ...]
+        var returnRoutes = [];      // array of polylines [{x,y}, ...]
+        var routePoints = [];       // current route being drawn
+
+        // Generated serpentine data
+        var serpentineData = [];     // array of {serpentine: [{x,y},...], lengthPx} per zone
         var pipesGenerated = false;
 
         // --- Shoelace formula ---
@@ -333,11 +348,20 @@
 
         function getUnitLabel() { return unit === "ft" ? "ft" : "m"; }
 
+        function polylineLength(pts) {
+            var len = 0;
+            for (var i = 0; i < pts.length - 1; i++) {
+                var dx = pts[i+1].x - pts[i].x;
+                var dy = pts[i+1].y - pts[i].y;
+                len += Math.sqrt(dx * dx + dy * dy);
+            }
+            return len;
+        }
+
         // --- Canvas resize ---
         function resizeCanvas() {
             canvas.width = img.clientWidth;
             canvas.height = img.clientHeight;
-            if (pipesGenerated) regeneratePipes();
             redraw();
         }
         img.onload = resizeCanvas;
@@ -356,24 +380,9 @@
         }
 
         // =====================================================
-        // GRID-BASED ORTHOGONAL PIPE ROUTING (WALL-AWARE)
+        // SERPENTINE GENERATION (auto-fill zones)
         // =====================================================
 
-        function polygonCentroid(pts) {
-            var cx = 0, cy = 0;
-            for (var i = 0; i < pts.length; i++) { cx += pts[i].x; cy += pts[i].y; }
-            return { x: cx / pts.length, y: cy / pts.length };
-        }
-
-        function pathLength(path) {
-            var len = 0;
-            for (var i = 0; i < path.length - 1; i++) {
-                len += Math.abs(path[i+1].x - path[i].x) + Math.abs(path[i+1].y - path[i].y);
-            }
-            return len;
-        }
-
-        // Find all x-coordinates where a horizontal line at y intersects the polygon
         function scanLineIntersections(pts, y) {
             var xs = [];
             var n = pts.length;
@@ -389,231 +398,6 @@
             return xs;
         }
 
-        // --- Wall intersection detection ---
-        function segmentsIntersect(p1, p2, p3, p4) {
-            var d1x = p2.x - p1.x, d1y = p2.y - p1.y;
-            var d2x = p4.x - p3.x, d2y = p4.y - p3.y;
-            var cross = d1x * d2y - d1y * d2x;
-            if (Math.abs(cross) < 1e-10) return false;
-            var t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / cross;
-            var u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / cross;
-            return t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99;
-        }
-
-        function lineHitsWall(a, b) {
-            for (var w = 0; w < walls.length; w++) {
-                var wall = walls[w];
-                for (var s = 0; s < wall.length - 1; s++) {
-                    if (segmentsIntersect(a, b, wall[s], wall[s + 1])) return true;
-                }
-            }
-            return false;
-        }
-
-        // --- Grid-based A* pathfinder (H/V moves only, wall-aware) ---
-        // Builds a coarse grid over the canvas and finds shortest orthogonal path
-        function findOrthogonalPath(from, to, gridStep) {
-            if (!gridStep) gridStep = 12;
-            // If direct H/V route doesn't hit walls, use simple route
-            var simple = buildSimpleRoute(from, to);
-            if (!routeHitsWall(simple)) return simple;
-
-            // Build grid-based A* search
-            var margin = gridStep * 2;
-            var minX = Math.min(from.x, to.x) - margin;
-            var maxX = Math.max(from.x, to.x) + margin;
-            var minY = Math.min(from.y, to.y) - margin;
-            var maxY = Math.max(from.y, to.y) + margin;
-
-            // Clamp to canvas
-            minX = Math.max(0, minX); minY = Math.max(0, minY);
-            maxX = Math.min(canvas.width, maxX); maxY = Math.min(canvas.height, maxY);
-
-            // Snap start/end to grid
-            function snapTo(pt) {
-                return {
-                    x: Math.round((pt.x - minX) / gridStep),
-                    y: Math.round((pt.y - minY) / gridStep)
-                };
-            }
-            function gridToWorld(gx, gy) {
-                return { x: minX + gx * gridStep, y: minY + gy * gridStep };
-            }
-
-            var cols = Math.ceil((maxX - minX) / gridStep) + 1;
-            var rows = Math.ceil((maxY - minY) / gridStep) + 1;
-
-            // Limit grid size to prevent performance issues
-            if (cols * rows > 50000) {
-                gridStep = Math.ceil(gridStep * 1.5);
-                return findOrthogonalPath(from, to, gridStep);
-            }
-
-            var startG = snapTo(from);
-            var endG = snapTo(to);
-            var startKey = startG.x + "," + startG.y;
-            var endKey = endG.x + "," + endG.y;
-
-            // A* with Manhattan distance heuristic
-            var openSet = {};
-            var gScore = {};
-            var fScore = {};
-            var cameFrom = {};
-            var closedSet = {};
-
-            gScore[startKey] = 0;
-            fScore[startKey] = Math.abs(endG.x - startG.x) + Math.abs(endG.y - startG.y);
-            openSet[startKey] = true;
-
-            var dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-
-            var iterations = 0;
-            var maxIter = cols * rows * 2;
-
-            while (Object.keys(openSet).length > 0 && iterations < maxIter) {
-                iterations++;
-                // Find node in openSet with lowest fScore
-                var currentKey = null, bestF = Infinity;
-                for (var key in openSet) {
-                    if (fScore[key] < bestF) { bestF = fScore[key]; currentKey = key; }
-                }
-                if (currentKey === null) break;
-
-                if (currentKey === endKey) {
-                    // Reconstruct path
-                    var path = [];
-                    var ck = endKey;
-                    while (ck) {
-                        var parts = ck.split(",");
-                        var wp = gridToWorld(parseInt(parts[0]), parseInt(parts[1]));
-                        path.unshift(wp);
-                        ck = cameFrom[ck];
-                    }
-                    // Prepend exact start, append exact end
-                    path[0] = { x: from.x, y: from.y };
-                    path[path.length - 1] = { x: to.x, y: to.y };
-                    // Simplify: remove collinear points
-                    return simplifyPath(path);
-                }
-
-                delete openSet[currentKey];
-                closedSet[currentKey] = true;
-
-                var parts = currentKey.split(",");
-                var cx = parseInt(parts[0]), cy = parseInt(parts[1]);
-                var cWorld = gridToWorld(cx, cy);
-
-                for (var d = 0; d < dirs.length; d++) {
-                    var nx = cx + dirs[d].dx, ny = cy + dirs[d].dy;
-                    if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-                    var nKey = nx + "," + ny;
-                    if (closedSet[nKey]) continue;
-
-                    var nWorld = gridToWorld(nx, ny);
-                    // Check if this grid edge crosses a wall
-                    if (lineHitsWall(cWorld, nWorld)) continue;
-
-                    var tentG = (gScore[currentKey] || 0) + 1;
-                    if (tentG < (gScore[nKey] || Infinity)) {
-                        cameFrom[nKey] = currentKey;
-                        gScore[nKey] = tentG;
-                        fScore[nKey] = tentG + Math.abs(endG.x - nx) + Math.abs(endG.y - ny);
-                        openSet[nKey] = true;
-                    }
-                }
-            }
-
-            // Fallback: if no path found, return simple route (shouldn't happen often)
-            return buildSimpleRoute(from, to);
-        }
-
-        // Simple L-shaped orthogonal route (no wall check)
-        function buildSimpleRoute(from, to) {
-            var route = [{ x: from.x, y: from.y }];
-            if (Math.abs(from.x - to.x) > 1 && Math.abs(from.y - to.y) > 1) {
-                route.push({ x: to.x, y: from.y }); // go horizontal first
-            }
-            route.push({ x: to.x, y: to.y });
-            return route;
-        }
-
-        // Check if any segment of a route hits a wall
-        function routeHitsWall(route) {
-            for (var i = 0; i < route.length - 1; i++) {
-                if (lineHitsWall(route[i], route[i + 1])) return true;
-            }
-            return false;
-        }
-
-        // Remove collinear intermediate points from an orthogonal path
-        function simplifyPath(path) {
-            if (path.length <= 2) return path;
-            var result = [path[0]];
-            for (var i = 1; i < path.length - 1; i++) {
-                var prev = result[result.length - 1];
-                var next = path[i + 1];
-                // Keep point only if direction changes
-                var sameX = Math.abs(prev.x - path[i].x) < 0.5 && Math.abs(path[i].x - next.x) < 0.5;
-                var sameY = Math.abs(prev.y - path[i].y) < 0.5 && Math.abs(path[i].y - next.y) < 0.5;
-                if (!sameX && !sameY) {
-                    result.push(path[i]);
-                } else if (!sameX && !sameY) {
-                    result.push(path[i]);
-                }
-            }
-            result.push(path[path.length - 1]);
-            return result;
-        }
-
-        // Build wall-aware orthogonal route via trunk corridor
-        function buildOrthogonalRoute(from, to, trunkY) {
-            // Try direct route through trunk corridor first
-            var viaTrunk = [];
-            viaTrunk.push({ x: from.x, y: from.y });
-            if (Math.abs(from.y - trunkY) > 1) viaTrunk.push({ x: from.x, y: trunkY });
-            if (Math.abs(from.x - to.x) > 1) viaTrunk.push({ x: to.x, y: trunkY });
-            if (Math.abs(trunkY - to.y) > 1) viaTrunk.push({ x: to.x, y: to.y });
-
-            // Remove duplicate consecutive points
-            var clean = [viaTrunk[0]];
-            for (var i = 1; i < viaTrunk.length; i++) {
-                if (Math.abs(viaTrunk[i].x - clean[clean.length-1].x) > 0.5 ||
-                    Math.abs(viaTrunk[i].y - clean[clean.length-1].y) > 0.5) {
-                    clean.push(viaTrunk[i]);
-                }
-            }
-
-            // If no walls or trunk route is clear, use it
-            if (walls.length === 0 || !routeHitsWall(clean)) return clean;
-
-            // Otherwise use A* grid pathfinder
-            return findOrthogonalPath(from, to, 10);
-        }
-
-        // Offset a polyline perpendicular for parallel supply/return pipes
-        function offsetRoute(route, offset) {
-            if (route.length < 2) return route.slice();
-            var result = [];
-            for (var i = 0; i < route.length; i++) {
-                var dx = 0, dy = 0;
-                if (i < route.length - 1) {
-                    var sx = route[i+1].x - route[i].x;
-                    var sy = route[i+1].y - route[i].y;
-                    var len = Math.sqrt(sx*sx + sy*sy);
-                    if (len > 0) { dx = -sy/len * offset; dy = sx/len * offset; }
-                } else {
-                    var sx2 = route[i].x - route[i-1].x;
-                    var sy2 = route[i].y - route[i-1].y;
-                    var len2 = Math.sqrt(sx2*sx2 + sy2*sy2);
-                    if (len2 > 0) { dx = -sy2/len2 * offset; dy = sx2/len2 * offset; }
-                }
-                result.push({ x: route[i].x + dx, y: route[i].y + dy });
-            }
-            return result;
-        }
-
-        // Generate serpentine fill within a zone polygon (wall-aware)
-        // Horizontal runs that cross a wall are split at the wall boundary
         function generateSerpentineInZone(pts, spacingPx) {
             var minY = Infinity, maxY = -Infinity;
             for (var i = 0; i < pts.length; i++) {
@@ -632,77 +416,29 @@
                     if (lx < rx) segments.push({ y: y, left: lx, right: rx });
                 }
             }
-            if (segments.length === 0) return [];
+            if (segments.length === 0) return { serpentine: [], lengthPx: 0 };
+
             var goingRight = true;
             var serpentine = [];
+            var totalLen = 0;
             for (var s = 0; s < segments.length; s++) {
                 var seg = segments[s];
                 var sx = goingRight ? seg.left : seg.right;
                 var ex = goingRight ? seg.right : seg.left;
                 var p1 = { x: sx, y: seg.y };
                 var p2 = { x: ex, y: seg.y };
-
-                // Check if this horizontal run crosses a wall
-                if (walls.length > 0 && lineHitsWall(p1, p2)) {
-                    // Skip this run but connect via wall-aware path
-                    if (serpentine.length > 0) {
-                        var prev = serpentine[serpentine.length - 1];
-                        var detour = findOrthogonalPath(prev, p2, 8);
-                        // Append detour (skip first point = prev)
-                        for (var dp = 1; dp < detour.length; dp++) {
-                            serpentine.push(detour[dp]);
-                        }
-                    } else {
-                        serpentine.push(p1);
-                        serpentine.push(p2);
-                    }
-                } else {
-                    // No wall collision — add normally
-                    if (serpentine.length > 0) {
-                        var prev2 = serpentine[serpentine.length - 1];
-                        // The vertical connector between rows might also hit a wall
-                        if (walls.length > 0 && lineHitsWall(prev2, p1)) {
-                            var connector = findOrthogonalPath(prev2, p1, 8);
-                            for (var cp = 1; cp < connector.length; cp++) {
-                                serpentine.push(connector[cp]);
-                            }
-                        } else {
-                            serpentine.push(p1);
-                        }
-                        serpentine.push(p2);
-                    } else {
-                        serpentine.push(p1);
-                        serpentine.push(p2);
-                    }
+                if (serpentine.length > 0) {
+                    var prev = serpentine[serpentine.length - 1];
+                    totalLen += Math.sqrt(
+                        Math.pow(p1.x - prev.x, 2) + Math.pow(p1.y - prev.y, 2)
+                    );
                 }
+                serpentine.push(p1);
+                serpentine.push(p2);
+                totalLen += Math.abs(ex - sx);
                 goingRight = !goingRight;
             }
-            return serpentine;
-        }
-
-        // Generate full pipe layout for one zone
-        function generateZonePipes(zone, manifold, spacingPx, trunkY, pipeGap) {
-            var serpentine = generateSerpentineInZone(zone.points, spacingPx);
-            if (serpentine.length === 0) {
-                return { supply: [], ret: [], serpentine: [], totalLenPx: 0 };
-            }
-            var serpStart = serpentine[0];
-            var serpEnd = serpentine[serpentine.length - 1];
-
-            // Supply: manifold -> trunk -> serpentine start
-            var supplyBase = buildOrthogonalRoute(
-                { x: manifold.x, y: manifold.y }, serpStart, trunkY
-            );
-            var supply = offsetRoute(supplyBase, -pipeGap / 2);
-
-            // Return: serpentine end -> trunk -> manifold
-            var returnBase = buildOrthogonalRoute(
-                serpEnd, { x: manifold.x, y: manifold.y }, trunkY
-            );
-            var ret = offsetRoute(returnBase, pipeGap / 2);
-
-            var totalLen = pathLength(supply) + pathLength(serpentine) + pathLength(ret);
-            return { supply: supply, ret: ret, serpentine: serpentine, totalLenPx: totalLen };
+            return { serpentine: serpentine, lengthPx: totalLen };
         }
 
         function findManifold(id) {
@@ -712,15 +448,12 @@
             return manifolds[0];
         }
 
-        function regeneratePipes() {
+        function regenerateSerpentine() {
             if (scale === 0 || zones.length === 0) return;
             var spacingPx = PIPE_CTC_M / linearScale;
-            var pipeGap = spacingPx * 0.4;
-            pipePaths = [];
+            serpentineData = [];
             for (var i = 0; i < zones.length; i++) {
-                var m = findManifold(zones[i].manifoldId);
-                var trunkY = m.y;
-                pipePaths.push(generateZonePipes(zones[i], m, spacingPx, trunkY, pipeGap, i));
+                serpentineData.push(generateSerpentineInZone(zones[i].points, spacingPx));
             }
         }
 
@@ -736,50 +469,52 @@
                 drawPolygon(boundaryPoints, BOUNDARY_COLOR, BOUNDARY_BORDER, null);
             }
 
-            // Draw completed walls
-            for (var wi = 0; wi < walls.length; wi++) {
-                drawWall(walls[wi]);
+            // Completed zones
+            for (var i = 0; i < zones.length; i++) {
+                drawPolygon(zones[i].points, zones[i].color, zones[i].border, zones[i]);
             }
 
-            // Draw in-progress wall
-            if (mode === "walls" && wallPoints.length > 0) {
-                drawWall(wallPoints);
-                // Preview line for wall
+            // Draw user-drawn supply routes (red)
+            for (var sr = 0; sr < supplyRoutes.length; sr++) {
+                drawPipePath(supplyRoutes[sr], SUPPLY_COLOR, 2.5, 0.9);
+            }
+            // Draw user-drawn return routes (blue)
+            for (var rr = 0; rr < returnRoutes.length; rr++) {
+                drawPipePath(returnRoutes[rr], RETURN_COLOR, 2.5, 0.9);
+            }
+
+            // Draw in-progress route
+            if ((mode === "drawing_supply" || mode === "drawing_return") && routePoints.length > 0) {
+                var routeColor = mode === "drawing_supply" ? SUPPLY_COLOR : RETURN_COLOR;
+                drawPipePath(routePoints, routeColor, 2.5, 0.6);
+                // Preview line
                 if (mousePos) {
-                    var wLast = wallPoints[wallPoints.length - 1];
+                    var rLast = routePoints[routePoints.length - 1];
                     ctx.beginPath();
-                    ctx.moveTo(wLast.x, wLast.y);
+                    ctx.moveTo(rLast.x, rLast.y);
                     ctx.lineTo(mousePos.x, mousePos.y);
-                    ctx.strokeStyle = WALL_COLOR;
-                    ctx.lineWidth = WALL_WIDTH;
+                    ctx.strokeStyle = routeColor;
+                    ctx.lineWidth = 2;
                     ctx.globalAlpha = 0.4;
                     ctx.setLineDash([4, 4]);
                     ctx.stroke();
                     ctx.setLineDash([]);
                     ctx.globalAlpha = 1.0;
                 }
-                // Dots on wall points
-                for (var wd = 0; wd < wallPoints.length; wd++) {
+                // Dots
+                for (var rd = 0; rd < routePoints.length; rd++) {
                     ctx.beginPath();
-                    ctx.arc(wallPoints[wd].x, wallPoints[wd].y, 4, 0, Math.PI * 2);
-                    ctx.fillStyle = WALL_COLOR;
+                    ctx.arc(routePoints[rd].x, routePoints[rd].y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = routeColor;
                     ctx.fill();
                 }
             }
 
-            // Completed zones
-            for (var i = 0; i < zones.length; i++) {
-                drawPolygon(zones[i].points, zones[i].color, zones[i].border, zones[i]);
-            }
-
-            // Pipe paths (supply=red, return=blue, serpentine=zone color)
+            // Generated serpentine fills
             if (pipesGenerated) {
-                for (var p = 0; p < pipePaths.length; p++) {
-                    var pp = pipePaths[p];
+                for (var p = 0; p < serpentineData.length; p++) {
                     var zoneColor = PIPE_COLORS[p % PIPE_COLORS.length];
-                    drawPipePath(pp.supply, "#c0392b", 2, 1.0);   // supply = red
-                    drawPipePath(pp.serpentine, zoneColor, 1.5, 0.7); // serpentine = zone color
-                    drawPipePath(pp.ret, "#2471a3", 2, 1.0);      // return = blue
+                    drawPipePath(serpentineData[p].serpentine, zoneColor, 1.5, 0.7);
                 }
             }
 
@@ -789,12 +524,11 @@
             }
 
             // In-progress drawing (boundary or zone polygon)
-            if (currentPoints.length > 0) {
+            if (currentPoints.length > 0 && (mode === "boundary" || mode === "zones")) {
                 var border = mode === "boundary"
                     ? BOUNDARY_BORDER
                     : ZONE_BORDERS[zones.length % ZONE_BORDERS.length];
 
-                // Draw placed lines
                 ctx.beginPath();
                 ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
                 for (var j = 1; j < currentPoints.length; j++) {
@@ -806,7 +540,6 @@
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Preview line from last point to cursor
                 if (mousePos) {
                     var lastPt = currentPoints[currentPoints.length - 1];
                     ctx.beginPath();
@@ -821,7 +554,6 @@
                     ctx.globalAlpha = 1.0;
                 }
 
-                // Draw dots at polygon points
                 for (var k = 0; k < currentPoints.length; k++) {
                     ctx.beginPath();
                     ctx.arc(currentPoints[k].x, currentPoints[k].y, 5, 0, Math.PI * 2);
@@ -846,22 +578,18 @@
 
         function drawManifoldMarker(m, isActive) {
             var color = isActive ? "#e74c3c" : "#555";
-            // Outer circle
             ctx.beginPath();
             ctx.arc(m.x, m.y, 9, 0, Math.PI * 2);
             ctx.fillStyle = color;
             ctx.fill();
-            // Inner circle
             ctx.beginPath();
             ctx.arc(m.x, m.y, 5, 0, Math.PI * 2);
             ctx.fillStyle = "white";
             ctx.fill();
-            // Center dot
             ctx.beginPath();
             ctx.arc(m.x, m.y, 2, 0, Math.PI * 2);
             ctx.fillStyle = color;
             ctx.fill();
-            // Label
             ctx.font = "bold 10px Arial";
             ctx.fillStyle = color;
             ctx.textAlign = "center";
@@ -869,44 +597,25 @@
             ctx.fillText(m.name, m.x, m.y - 12);
         }
 
-        function drawWall(pts) {
-            if (pts.length < 2) return;
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
-            for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-            ctx.strokeStyle = WALL_COLOR;
-            ctx.lineWidth = WALL_WIDTH;
-            ctx.lineCap = "round";
-            ctx.lineJoin = "round";
-            ctx.stroke();
-        }
-
         function drawPolygon(pts, fillColor, strokeColor, zone) {
             if (pts.length < 3) return;
-
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
             for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
             ctx.closePath();
-
-            // Only fill the boundary, not heating zones (so floor plan is visible)
             if (!zone) {
                 ctx.fillStyle = fillColor;
                 ctx.fill();
             }
-
             ctx.strokeStyle = strokeColor;
             ctx.lineWidth = 2;
             ctx.stroke();
-
             if (zone && scale > 0) {
                 var cx = 0, cy = 0;
                 for (var j = 0; j < pts.length; j++) { cx += pts[j].x; cy += pts[j].y; }
                 cx /= pts.length; cy /= pts.length;
-
                 var area = pixelsToRealArea(polygonAreaPixels(pts));
                 var u = getUnitLabel();
-
                 ctx.font = "bold 14px Arial";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
@@ -976,45 +685,57 @@
                 });
                 currentPoints = [];
 
-                // Clear old pipes when zones change
-                pipesGenerated = false;
-                pipePaths = [];
-                document.getElementById("clearPipesBtn").classList.add("hidden");
-                document.getElementById("generateBtn").disabled = false;
-                document.getElementById("manifoldBox").classList.add("hidden");
+                // Show done button when zones exist
+                document.getElementById("doneZonesBtn").classList.remove("hidden");
 
                 redraw();
                 updateZoneList();
-                document.getElementById("step5panel").classList.remove("hidden");
             }
+        }
+
+        function finishCurrentRoute() {
+            if (routePoints.length < 2) {
+                alert("You need at least 2 points to draw a pipe route.");
+                return;
+            }
+            if (mode === "drawing_supply") {
+                supplyRoutes.push(routePoints.slice());
+            } else if (mode === "drawing_return") {
+                returnRoutes.push(routePoints.slice());
+            }
+            routePoints = [];
+            updateRouteInfo();
+            redraw();
         }
 
         // =====================================================
         // EVENT HANDLERS
         // =====================================================
 
-        // Track cursor for preview line
         canvas.addEventListener("mousemove", function(e) {
             mousePos = getPos(e);
-            if (currentPoints.length > 0 || wallPoints.length > 0 || mode === "placing_manifold") redraw();
+            if (currentPoints.length > 0 || routePoints.length > 0 ||
+                mode === "placing_manifold" || mode === "drawing_supply" || mode === "drawing_return") {
+                redraw();
+            }
         });
         canvas.addEventListener("mouseleave", function() {
             mousePos = null;
-            if (currentPoints.length > 0 || wallPoints.length > 0 || mode === "placing_manifold") redraw();
+            redraw();
         });
         canvas.addEventListener("touchmove", function(e) {
             e.preventDefault();
             if (e.touches.length > 0) {
                 mousePos = getPos(e);
-                if (currentPoints.length > 0) redraw();
+                redraw();
             }
         });
 
         canvas.addEventListener("click", function(e) {
-            if (mode === "scale") return;
+            if (mode === "scale" || mode === "done_routes") return;
 
-            if (mode === "walls") {
-                wallPoints.push(getPos(e));
+            if (mode === "drawing_supply" || mode === "drawing_return") {
+                routePoints.push(getPos(e));
                 redraw();
                 return;
             }
@@ -1031,49 +752,43 @@
                 return;
             }
 
-            currentPoints.push(getPos(e));
-            redraw();
+            if (mode === "boundary" || mode === "zones") {
+                currentPoints.push(getPos(e));
+                redraw();
+            }
         });
 
         canvas.addEventListener("dblclick", function(e) {
             e.preventDefault();
-            if (mode === "scale") return;
+            if (mode === "scale" || mode === "done_routes") return;
 
-            if (mode === "walls") {
-                if (wallPoints.length > 0) wallPoints.pop(); // remove dblclick duplicate
-                if (wallPoints.length >= 2) {
-                    walls.push(wallPoints.slice());
-                    wallPoints = [];
-                    updateWallCount();
-                    redraw();
-                }
+            if (mode === "drawing_supply" || mode === "drawing_return") {
+                if (routePoints.length > 0) routePoints.pop();
+                finishCurrentRoute();
                 return;
             }
 
-            if (currentPoints.length > 0) currentPoints.pop();
-            finishCurrentShape();
+            if (mode === "boundary" || mode === "zones") {
+                if (currentPoints.length > 0) currentPoints.pop();
+                finishCurrentShape();
+            }
         });
 
         var lastTapTime = 0;
         canvas.addEventListener("touchend", function(e) {
             e.preventDefault();
-            if (mode === "scale") return;
+            if (mode === "scale" || mode === "done_routes") return;
             var now = Date.now();
             var touch = e.changedTouches[0];
             var pos = getPos({ clientX: touch.clientX, clientY: touch.clientY });
 
-            if (mode === "walls") {
+            if (mode === "drawing_supply" || mode === "drawing_return") {
                 if (now - lastTapTime < 350) {
-                    if (wallPoints.length > 0) wallPoints.pop();
-                    if (wallPoints.length >= 2) {
-                        walls.push(wallPoints.slice());
-                        wallPoints = [];
-                        updateWallCount();
-                        redraw();
-                    }
+                    if (routePoints.length > 0) routePoints.pop();
+                    finishCurrentRoute();
                     lastTapTime = 0;
                 } else {
-                    wallPoints.push(pos);
+                    routePoints.push(pos);
                     redraw();
                     lastTapTime = now;
                 }
@@ -1113,8 +828,9 @@
         document.getElementById("resetBoundaryBtn").addEventListener("click", function() {
             boundaryPoints = []; boundaryArea = null; currentPoints = [];
             scale = 0; linearScale = 0; zones = []; manifolds = [];
-            activeManifoldId = null; walls = []; wallPoints = [];
-            pipePaths = []; pipesGenerated = false;
+            activeManifoldId = null;
+            supplyRoutes = []; returnRoutes = []; routePoints = [];
+            serpentineData = []; pipesGenerated = false;
             mode = "boundary";
 
             document.getElementById("boundaryDoneSection").classList.add("hidden");
@@ -1143,7 +859,7 @@
             realAreaValue = areaVal;
             scale = realAreaValue / boundaryArea;
             linearScale = Math.sqrt(scale);
-            mode = "walls";
+            mode = "zones";
 
             document.getElementById("boundaryInfo").textContent =
                 "Property boundary set: " + realAreaValue + " " + getUnitLabel() + "\u00B2. Scale locked.";
@@ -1154,43 +870,9 @@
             redraw();
         });
 
-        // --- Step 3: Wall buttons ---
-        document.getElementById("undoWallBtn").addEventListener("click", function() {
-            if (wallPoints.length > 0) { wallPoints.pop(); redraw(); }
-        });
-        document.getElementById("cancelWallBtn").addEventListener("click", function() {
-            wallPoints = []; redraw();
-        });
-        document.getElementById("clearWallsBtn").addEventListener("click", function() {
-            if (walls.length === 0 && wallPoints.length === 0) return;
-            if (confirm("Remove all walls?")) {
-                walls = []; wallPoints = [];
-                updateWallCount(); redraw();
-            }
-        });
-        document.getElementById("doneWallsBtn").addEventListener("click", function() {
-            // Finish any in-progress wall
-            if (wallPoints.length >= 2) {
-                walls.push(wallPoints.slice());
-                wallPoints = [];
-            }
-            mode = "zones";
-            document.getElementById("step3num").classList.add("done");
-            document.getElementById("step4panel").classList.remove("hidden");
-            updateWallCount();
-            redraw();
-        });
-
-        function updateWallCount() {
-            var el = document.getElementById("wallCount");
-            el.textContent = walls.length === 0
-                ? "No walls drawn yet. Click 'Done' to skip."
-                : walls.length + " wall(s) drawn.";
-        }
-
-        // --- Step 4: Place Manifold button ---
+        // --- Step 3: Place Manifold & Zone buttons ---
         document.getElementById("placeManifoldBtn").addEventListener("click", function() {
-            currentPoints = []; // cancel any in-progress zone
+            currentPoints = [];
             mode = "placing_manifold";
             updateManifoldStatus();
             redraw();
@@ -1206,16 +888,13 @@
             } else {
                 var names = [];
                 for (var i = 0; i < manifolds.length; i++) names.push(manifolds[i].name);
-                var active = manifolds.length > 0
-                    ? manifolds.filter(function(m) { return m.id === activeManifoldId; })[0]
-                    : null;
+                var active = manifolds.filter(function(m) { return m.id === activeManifoldId; })[0];
                 el.textContent = "Manifolds: " + names.join(", ") +
                     (active ? " (active: " + active.name + ")" : "");
                 el.style.color = "#27ae60";
             }
         }
 
-        // --- Step 3 buttons ---
         document.getElementById("undoBtn").addEventListener("click", function() {
             if (currentPoints.length > 0) { currentPoints.pop(); redraw(); }
         });
@@ -1227,19 +906,98 @@
             if (confirm("Remove all manifolds and heating zones?")) {
                 zones = []; currentPoints = []; manifolds = [];
                 activeManifoldId = null;
-                pipePaths = []; pipesGenerated = false;
+                supplyRoutes = []; returnRoutes = []; routePoints = [];
+                serpentineData = []; pipesGenerated = false;
                 mode = "zones";
                 updateManifoldStatus();
+                document.getElementById("doneZonesBtn").classList.add("hidden");
+                document.getElementById("step4panel").classList.add("hidden");
                 document.getElementById("step5panel").classList.add("hidden");
                 document.getElementById("manifoldBox").classList.add("hidden");
-                document.getElementById("clearPipesBtn").classList.add("hidden");
                 redraw(); updateZoneList();
             }
         });
 
-        // --- Step 4: Generate pipes ---
+        document.getElementById("doneZonesBtn").addEventListener("click", function() {
+            if (zones.length === 0) {
+                alert("Draw at least one heating zone first.");
+                return;
+            }
+            mode = "drawing_supply";
+            document.getElementById("step3num").classList.add("done");
+            document.getElementById("step4panel").classList.remove("hidden");
+            updateRouteInfo();
+            redraw();
+        });
+
+        // --- Step 4: Draw pipe route buttons ---
+        document.getElementById("drawSupplyBtn").addEventListener("click", function() {
+            // Finish any in-progress route
+            if (routePoints.length >= 2) finishCurrentRoute();
+            else routePoints = [];
+            mode = "drawing_supply";
+            document.getElementById("drawSupplyBtn").classList.add("active-toggle");
+            document.getElementById("drawReturnBtn").classList.remove("active-toggle");
+            redraw();
+        });
+
+        document.getElementById("drawReturnBtn").addEventListener("click", function() {
+            if (routePoints.length >= 2) finishCurrentRoute();
+            else routePoints = [];
+            mode = "drawing_return";
+            document.getElementById("drawReturnBtn").classList.add("active-toggle");
+            document.getElementById("drawSupplyBtn").classList.remove("active-toggle");
+            redraw();
+        });
+
+        document.getElementById("undoRouteBtn").addEventListener("click", function() {
+            if (routePoints.length > 0) { routePoints.pop(); redraw(); }
+        });
+        document.getElementById("cancelRouteBtn").addEventListener("click", function() {
+            routePoints = []; redraw();
+        });
+        document.getElementById("clearRoutesBtn").addEventListener("click", function() {
+            if (supplyRoutes.length === 0 && returnRoutes.length === 0 && routePoints.length === 0) return;
+            if (confirm("Remove all pipe routes?")) {
+                supplyRoutes = []; returnRoutes = []; routePoints = [];
+                serpentineData = []; pipesGenerated = false;
+                document.getElementById("manifoldBox").classList.add("hidden");
+                document.getElementById("clearPipesBtn").classList.add("hidden");
+                document.getElementById("step5panel").classList.add("hidden");
+                updateRouteInfo();
+                redraw();
+            }
+        });
+
+        document.getElementById("doneRoutesBtn").addEventListener("click", function() {
+            // Finish any in-progress route
+            if (routePoints.length >= 2) finishCurrentRoute();
+            else routePoints = [];
+            mode = "done_routes";
+            document.getElementById("step4num").classList.add("done");
+            document.getElementById("step5panel").classList.remove("hidden");
+            redraw();
+        });
+
+        function updateRouteInfo() {
+            var el = document.getElementById("routeInfo");
+            var sLen = 0, rLen = 0;
+            for (var i = 0; i < supplyRoutes.length; i++) sLen += polylineLength(supplyRoutes[i]);
+            for (var j = 0; j < returnRoutes.length; j++) rLen += polylineLength(returnRoutes[j]);
+            var u = getUnitLabel();
+            if (supplyRoutes.length === 0 && returnRoutes.length === 0) {
+                el.textContent = "No pipe routes drawn yet. Select Supply or Return and start clicking on the floor plan.";
+            } else {
+                el.textContent = supplyRoutes.length + " supply line(s) (" +
+                    pixelsToRealLength(sLen).toFixed(1) + " " + u + "), " +
+                    returnRoutes.length + " return line(s) (" +
+                    pixelsToRealLength(rLen).toFixed(1) + " " + u + ")";
+            }
+        }
+
+        // --- Step 5: Generate serpentine ---
         document.getElementById("generateBtn").addEventListener("click", function() {
-            regeneratePipes();
+            regenerateSerpentine();
             pipesGenerated = true;
             redraw();
             updateManifoldTable();
@@ -1247,7 +1005,7 @@
         });
 
         document.getElementById("clearPipesBtn").addEventListener("click", function() {
-            pipePaths = []; pipesGenerated = false;
+            serpentineData = []; pipesGenerated = false;
             document.getElementById("manifoldBox").classList.add("hidden");
             document.getElementById("clearPipesBtn").classList.add("hidden");
             document.getElementById("generateBtn").disabled = false;
@@ -1292,10 +1050,12 @@
                     delBtn.textContent = "Delete";
                     delBtn.addEventListener("click", function() {
                         zones.splice(idx, 1);
-                        pipePaths = []; pipesGenerated = false;
+                        serpentineData = []; pipesGenerated = false;
                         document.getElementById("manifoldBox").classList.add("hidden");
                         document.getElementById("clearPipesBtn").classList.add("hidden");
                         if (zones.length === 0) {
+                            document.getElementById("doneZonesBtn").classList.add("hidden");
+                            document.getElementById("step4panel").classList.add("hidden");
                             document.getElementById("step5panel").classList.add("hidden");
                         }
                         redraw(); updateZoneList();
@@ -1330,12 +1090,17 @@
             var totalFloorArea = 0;
             var totalPipeLength = 0;
 
+            // Calculate total supply + return route lengths
+            var totalSupplyPx = 0, totalReturnPx = 0;
+            for (var si = 0; si < supplyRoutes.length; si++) totalSupplyPx += polylineLength(supplyRoutes[si]);
+            for (var ri = 0; ri < returnRoutes.length; ri++) totalReturnPx += polylineLength(returnRoutes[ri]);
+
             // Per-zone rows
             for (var i = 0; i < zones.length; i++) {
                 var area = pixelsToRealArea(polygonAreaPixels(zones[i].points));
-                var pipeLen = pixelsToRealLength(pipePaths[i] ? pipePaths[i].totalLenPx : 0);
+                var serpLen = pixelsToRealLength(serpentineData[i] ? serpentineData[i].lengthPx : 0);
                 totalFloorArea += area;
-                totalPipeLength += pipeLen;
+                totalPipeLength += serpLen;
 
                 var mName = findManifold(zones[i].manifoldId).name;
                 var row = document.createElement("tr");
@@ -1344,11 +1109,16 @@
                     "<td>" + zones[i].name + "</td>" +
                     "<td>" + mName + "</td>" +
                     "<td>" + area.toFixed(1) + " " + u + "\u00B2</td>" +
-                    "<td>" + pipeLen.toFixed(1) + " " + u + "</td>" +
+                    "<td>" + serpLen.toFixed(1) + " " + u + "</td>" +
                     "<td>15 cm</td>" +
                     "<td>1.6 cm</td>";
                 manifoldBody.appendChild(row);
             }
+
+            // Add supply + return to total pipe length
+            var supplyReal = pixelsToRealLength(totalSupplyPx);
+            var returnReal = pixelsToRealLength(totalReturnPx);
+            totalPipeLength += supplyReal + returnReal;
 
             // Total row
             var totalRow = document.createElement("tr");
@@ -1378,6 +1148,8 @@
             specGrid.innerHTML =
                 "<dt>Total Floor Area</dt><dd>" + totalFloorArea.toFixed(1) + " " + u + "\u00B2</dd>" +
                 "<dt>Manifolds</dt><dd>" + manifoldSummary + "</dd>" +
+                "<dt>Supply Pipe</dt><dd>" + supplyReal.toFixed(1) + " " + u + " (" + supplyRoutes.length + " line" + (supplyRoutes.length !== 1 ? "s" : "") + ")</dd>" +
+                "<dt>Return Pipe</dt><dd>" + returnReal.toFixed(1) + " " + u + " (" + returnRoutes.length + " line" + (returnRoutes.length !== 1 ? "s" : "") + ")</dd>" +
                 "<dt>Total Pipe Length</dt><dd>" + totalPipeLength.toFixed(1) + " " + u + "</dd>" +
                 "<dt>Pipe Diameter</dt><dd>1.6 cm (16 mm)</dd>" +
                 "<dt>Pipe Spacing (C.T.C.)</dt><dd>15 cm</dd>" +
